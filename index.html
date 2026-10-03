@@ -402,7 +402,7 @@ function drawRoll(){
   const cv=$('#roll'),n=song.songNotes;if(!n.length){cv.width=1;return}
   const Lg=60000/(song.bpm||120),cs=n.map(x=>({c:Math.floor(x.time/Lg),k:+x.key.replace(/^\dKey/,'')}));
   let c0=Infinity,c1=-Infinity;for(const a of cs){if(a.c<c0)c0=a.c;if(a.c>c1)c1=a.c}
-  const W=8,H=10,cols=Math.min(c1-c0+1,3500);
+  const W=8,H=10,cols=Math.min(c1-c0+1,2000);
   cv.width=cols*W;cv.height=15*H;
   const x=cv.getContext('2d');x.fillStyle='#050608';x.fillRect(0,0,cv.width,cv.height);
   x.fillStyle='#1e293b';for(let c=0;c<cols;c+=4)x.fillRect(c*W,0,1,cv.height);
@@ -468,7 +468,7 @@ async function load(f,keep){
   if(!keep){resetRun();step(3,'ok','Bỏ qua: dùng file có sẵn')}
   fileName=f.name.replace(/\.[^.]+$/,'');
   log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
-  const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('small').textContent='Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'},500);
+  const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('small').textContent='Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'+(window.PROG||'')},500);
   try{
     const buf=await f.arrayBuffer(),h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
     if(h==='MThd'){
@@ -482,10 +482,10 @@ async function load(f,keep){
       step(0,'run','Đang chuẩn bị…');
       if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
       if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-      log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
-      const ns=await model.transcribeFromAudioFile(f);
+      log('Giải mã âm thanh (16 kHz mono) rồi nhận dạng nốt piano. Có thể mất vài phút…');
+      const ns=await transcribe(buf);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
-      midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
+      try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
@@ -532,6 +532,33 @@ $('#linkForm').addEventListener('submit',async e=>{
     step(3,'err','Lỗi');log('Lỗi: '+m,'err');
   }finally{go.disabled=false}
 });
+/* ---------- Nhận dạng tiết kiệm bộ nhớ ----------
+   Bản cũ đưa cả file (đã giải mã 44.1 kHz stereo) vào mô hình một lần nên máy yếu/iPhone hết RAM và trang tự tải lại.
+   Giờ: giải mã thẳng ở 16 kHz mono (nhẹ hơn ~11 lần), cắt thành đoạn 30 giây (chồng 1,5 giây ở hai đầu để nốt ở mép không bị cụt),
+   nhận dạng từng đoạn, nhường giao diện giữa các đoạn và báo tiến độ. */
+async function transcribe(buf){
+  const SR=16000,AC=window.AudioContext||window.webkitAudioContext,dctx=new AC({sampleRate:SR});
+  let ab=await dctx.decodeAudioData(buf),mono=new Float32Array(ab.length),from=ab.sampleRate;
+  for(let c=0;c<ab.numberOfChannels;c++){const d=ab.getChannelData(c);for(let i=0;i<mono.length;i++)mono[i]+=d[i]/ab.numberOfChannels}
+  ab=null;
+  if(from!==SR){const r=from/SR,m=Math.floor(mono.length/r),y=new Float32Array(m);
+    for(let i=0;i<m;i++){const q=i*r,k=q|0,f=q-k;y[i]=mono[k]*(1-f)+(mono[k+1]||0)*f}mono=y}
+  const C=30*SR,OV=Math.round(1.5*SR),total=Math.max(1,Math.ceil(mono.length/C)),notes=[];
+  log('Âm thanh dài '+(mono.length/SR).toFixed(1)+' giây, chia '+total+' đoạn để đỡ tốn bộ nhớ');
+  const run=seg=>model.transcribeFromAudioArray?model.transcribeFromAudioArray(seg)
+    :(b=>(b.copyToChannel(seg,0),model.transcribeFromAudioBuffer(b)))(dctx.createBuffer(1,seg.length,SR));
+  for(let k=0;k<total;k++){
+    const s0=k*C,a=Math.max(0,s0-OV),b=Math.min(mono.length,s0+C+OV),off=a/SR,lo=s0/SR,hi=(s0+C)/SR;
+    const ns=await run(mono.slice(a,b));
+    for(const n of ns.notes){const st=(n.startTime||0)+off;
+      if(st>=lo&&(st<hi||k===total-1))notes.push({pitch:n.pitch,velocity:n.velocity,startTime:st,endTime:n.endTime+off,instrument:0,program:0,isDrum:false})}
+    window.PROG=' · đoạn '+(k+1)+'/'+total;
+    log('Xong đoạn '+(k+1)+'/'+total+' ('+notes.length+' nốt)');
+    await new Promise(r=>setTimeout(r,60));              // nhường giao diện, cho trình duyệt dọn bộ nhớ
+  }
+  window.PROG='';dctx.close&&dctx.close();
+  return{notes,totalTime:mono.length/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
+}
 function loadSky(buf){
   const u=new Uint8Array(buf);let txt;
   if(u[0]===0xFF&&u[1]===0xFE)txt=new TextDecoder('utf-16le').decode(buf);
