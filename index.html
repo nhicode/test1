@@ -90,12 +90,6 @@ textarea{height:130px;font-family:monospace;font-size:12px}
   <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted)">Chỉ dùng nội dung bạn có quyền sử dụng. Nhạc và video trên TikTok thuộc bản quyền của tác giả và chủ sở hữu.</p>
 </form>
 
-<div class="card" style="padding:18px">
-  <label for="srv">Máy chủ nhận dạng (địa chỉ Hugging Face Space của bạn, để trống = chạy ngay trên trình duyệt)</label>
-  <input id="srv" type="url" inputmode="url" placeholder="https://ten-ban-sky-transcribe.hf.space">
-  <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted)">Có máy chủ thì cả file được nhận dạng một lượt, không chia đoạn, không tốn RAM điện thoại.</p>
-</div>
-
 <div class="flow">
   <div>
     <ol id="steps">
@@ -463,36 +457,10 @@ function resetRun(){
 }
 $('#bOpen').onclick=()=>mp3Url&&window.open(mp3Url,'_blank','noopener');
 
-/* ---------- Máy chủ nhận dạng: gửi nguyên file, nhận dạng một lượt ---------- */
-const SERVER_URL='';   /* hoặc điền cứng địa chỉ máy chủ vào đây */
-function serverUrl(){return (SERVER_URL||$('#srv').value||'').trim().replace(/\/+$/,'')}
-$('#srv').value=localStorage.getItem('skySrv')||'';
-$('#srv').addEventListener('change',()=>{localStorage.setItem('skySrv',$('#srv').value.trim());log($('#srv').value.trim()?'Đã lưu địa chỉ máy chủ':'Đã xoá máy chủ, sẽ chạy trên trình duyệt')});
-async function transcribeServer(f,srv){
-  log('Gửi nguyên file lên máy chủ để nhận dạng một lượt (lần đầu máy chủ có thể cần ~1 phút để thức dậy)…');
-  const fd=new FormData();fd.append('file',f,f.name);
-  let r=await fetch(srv+'/transcribe',{method:'POST',body:fd});
-  if(!r.ok)throw new Error('Máy chủ trả lỗi '+r.status);
-  const job=(await r.json()).job;log('Máy chủ đã nhận file, đang xử lý…');
-  for(;;){
-    await new Promise(x=>setTimeout(x,2000));
-    r=await fetch(srv+'/job/'+job);
-    if(!r.ok)throw new Error('Máy chủ trả lỗi '+r.status);
-    const j=await r.json();
-    window.PROG=' · máy chủ '+(j.status==='queued'?'đang xếp hàng':'đang nhận dạng')+' ('+j.elapsed+' s)';
-    if(j.status==='error')throw new Error(j.error||'Máy chủ báo lỗi');
-    if(j.status==='done'){
-      window.PROG='';const R=j.result;
-      R.midi=Uint8Array.from(atob(R.midi),c=>c.charCodeAt(0));
-      log('Máy chủ nhận dạng xong cả bài','ok');return R;
-    }
-  }
-}
-
 /* ---------- Mô hình: nạp ngầm ngay khi mở trang ---------- */
 let warmP=null;
 function warmModel(){
-  if(model||warmP||!window.mm||serverUrl())return warmP;
+  if(model||warmP||!window.mm)return warmP;
   warmP=(async()=>{const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã nạp sẵn ở nền','ok')})()
     .catch(()=>{warmP=null;log('Nạp nền chưa được, sẽ nạp khi bắt đầu','wr')});
   return warmP;
@@ -515,18 +483,13 @@ async function load(f,keep){
       step(0,'ok','Bỏ qua: đã là file Sky');loadSky(buf);
     }else{
       step(0,'run','Đang chuẩn bị…');
-      const srv=serverUrl();let ns;
-      if(srv)ns=await transcribeServer(f,srv);
-      else{
-        if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
-        if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
-        if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-        log('Giải mã âm thanh (16 kHz mono) rồi nhận dạng nốt piano. Có thể mất vài phút…');
-        ns=await transcribe(buf);
-      }
+      if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
+      if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
+      if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
+      log('Giải mã âm thanh rồi nhận dạng CẢ BÀI một lượt, không chia đoạn. Có thể mất vài phút, đừng đóng trang…');
+      const ns=await transcribe(buf);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
-      if(ns.midi){midiBytes=ns.midi;$('#bMid').hidden=false}
-      else try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
+      try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
@@ -576,34 +539,6 @@ $('#linkForm').addEventListener('submit',async e=>{
   }finally{go.disabled=false}
 });
 
-/* ---------- "Máy ảo" = Web Worker: luồng riêng, bộ nhớ riêng ----------
-   Worker giữ toàn bộ âm thanh mono, trộn kênh, đổi tần số, cắt đoạn, đo độ lớn và lọc nốt nhiễu.
-   Trang chính chỉ giữ mô hình + một đoạn nhỏ nên nhanh hơn và đỡ tràn RAM (iPhone). */
-const WSRC=`
-let mono=null,n=1;
-onmessage=e=>{const m=e.data;
- if(m.t==='init'){mono=new Float32Array(m.len);n=m.nch;postMessage({})}
- else if(m.t==='add'){const d=m.d;for(let i=0;i<d.length;i++)mono[i]+=d[i]/n;postMessage({})}
- else if(m.t==='fin'){
-  if(m.from!==m.SR){const r=m.from/m.SR,k=Math.floor(mono.length/r),y=new Float32Array(k);
-   for(let i=0;i<k;i++){const q=i*r,j=q|0,f=q-j;y[i]=mono[j]*(1-f)+(mono[j+1]||0)*f}mono=y}
-  postMessage({len:mono.length})}
- else if(m.t==='chunk'){
-  const s=mono.slice(m.a,m.b);let r=0,c=0;for(let i=0;i<s.length;i+=4){r+=s[i]*s[i];c++}
-  postMessage({seg:s,rms:Math.sqrt(r/Math.max(1,c))},[s.buffer])}
- else if(m.t==='clean'){
-  const ns=m.notes.sort((a,b)=>a.startTime-b.startTime),last={},out=[];
-  for(const x of ns){
-   if(x.endTime-x.startTime<.06)continue;
-   const l=last[x.pitch];if(l!==undefined&&x.startTime-l<.06)continue;
-   last[x.pitch]=x.startTime;out.push(x)}
-  postMessage({notes:out,dropped:ns.length-out.length})}
- else if(m.t==='free'){mono=null;postMessage({})}
-};`;
-let worker=null;
-const mkWorker=()=>worker||(worker=new Worker(URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'}))));
-const ask=(m,tr)=>new Promise((res,rej)=>{const w=mkWorker();w.onmessage=e=>res(e.data);w.onerror=e=>rej(new Error(e.message||'Lỗi luồng nền'));w.postMessage(m,tr||[])});
-
 /* Khi WebGL bị mất: bỏ mô hình cũ, chuyển sang CPU nếu được, nạp lại */
 async function recover(){
   try{model.dispose&&model.dispose()}catch(e){}
@@ -611,49 +546,43 @@ async function recover(){
   if(T&&T.setBackend){try{await T.setBackend('cpu');log('Đã chuyển sang CPU (chậm hơn nhưng ổn định)','wr')}catch(e){log('Không chuyển được sang CPU','wr')}}
   const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;
 }
+/* Nhận dạng NGUYÊN bài một lượt: giải mã 16 kHz mono rồi đưa cả mảng vào mô hình, không cắt đoạn */
 async function transcribe(buf){
   const SR=16000,AC=window.AudioContext||window.webkitAudioContext,dctx=new AC({sampleRate:SR});
   let ab=await dctx.decodeAudioData(buf);
-  const nch=ab.numberOfChannels,from=ab.sampleRate;
-  await ask({t:'init',len:ab.length,nch});
-  for(let c=0;c<nch;c++){const d=ab.getChannelData(c).slice();await ask({t:'add',d},[d.buffer])}
+  const len0=ab.length,from=ab.sampleRate,nch=ab.numberOfChannels;
+  let mono=new Float32Array(len0);
+  for(let c=0;c<nch;c++){const d=ab.getChannelData(c);for(let i=0;i<len0;i++)mono[i]+=d[i]/nch}
   ab=null;dctx.close&&dctx.close();
-  const len=(await ask({t:'fin',from,SR})).len;
-  /* Cỡ đoạn theo thiết bị: iPhone 15 s, máy >=8 GB RAM 40 s, còn lại 20 s; chồng 1,5 s hai đầu để nốt ở mép không bị cụt */
-  const ios=/iP(hone|ad|od)/.test(navigator.userAgent),mem=navigator.deviceMemory||4;
-  const C=(ios?15:mem>=8?40:20)*SR,OV=512*48,total=Math.max(1,Math.ceil(len/C)),notes=[];
-  log('Âm thanh dài '+(len/SR).toFixed(1)+' giây, chia '+total+' đoạn (luồng nền giữ bộ nhớ)');
+  if(from!==SR){const r=from/SR,m=Math.floor(len0/r),y=new Float32Array(m);
+    for(let i=0;i<m;i++){const q=i*r,k=q|0,f=q-k;y[i]=mono[k]*(1-f)+(mono[k+1]||0)*f}mono=y}
+  const len=mono.length;
+  log('Âm thanh dài '+(len/SR).toFixed(1)+' giây, nhận dạng cả bài một lượt');
+  window.PROG=' · đang nhận dạng cả bài';
   const actx=new AC({sampleRate:SR});
   const run=seg=>model.transcribeFromAudioArray?model.transcribeFromAudioArray(seg)
     :(b=>(b.copyToChannel(seg,0),model.transcribeFromAudioBuffer(b)))(actx.createBuffer(1,seg.length,SR));
-  let skipped=0;
-  for(let k=0;k<total;k++){
-    const s0=k*C,a=Math.max(0,s0-OV),b=Math.min(len,s0+C+OV),off=a/SR,lo=s0/SR,hi=(s0+C)/SR;
-    const ch=await ask({t:'chunk',a,b});
-    window.PROG=' · đoạn '+(k+1)+'/'+total;
-    if(ch.rms<0.0015){skipped++;log('Đoạn '+(k+1)+'/'+total+' im lặng, bỏ qua');continue}
-    let ns;
-    for(let tries=0;;){
-      try{ns=await run(ch.seg);break}
-      catch(err){
-        if(++tries>2)throw err;
-        log('Đoạn '+(k+1)+' lỗi ('+(err.message||err)+'), đang khôi phục rồi thử lại…','wr');
-        await recover();
-      }
+  let ns;
+  for(let tries=0;;){
+    try{ns=await run(mono);break}
+    catch(err){
+      if(++tries>2)throw err;
+      log('Nhận dạng lỗi ('+(err.message||err)+'), đang khôi phục rồi thử lại cả bài…','wr');
+      await recover();
     }
-    for(const n of ns.notes){const st=(n.startTime||0)+off;
-      if(st>=lo&&(st<hi||k===total-1))notes.push({pitch:n.pitch,velocity:n.velocity,startTime:st,endTime:n.endTime+off,instrument:0,program:0,isDrum:false})}
-    log('Xong đoạn '+(k+1)+'/'+total+' ('+notes.length+' nốt)');
-    await new Promise(r=>setTimeout(r,0));
   }
-  await ask({t:'free'});actx.close&&actx.close();
-  const T=window.tf||(window.mm&&mm.tf);
-  try{if(T&&T.memory)log('Bộ nhớ TF.js: '+T.memory().numTensors+' tensor, '+(T.memory().numBytes/1048576).toFixed(1)+' MB')}catch(e){}
-  if(skipped)log('Bỏ qua '+skipped+' đoạn im lặng nên chạy nhanh hơn','ok');
-  const r=await ask({t:'clean',notes});
-  log('Lọc nhiễu: bỏ '+r.dropped+' nốt quá ngắn hoặc nhận trùng, giữ '+r.notes.length);
+  actx.close&&actx.close();mono=null;
+  const notes=ns.notes.map(n=>({pitch:n.pitch,velocity:n.velocity,startTime:n.startTime||0,endTime:n.endTime,instrument:0,program:0,isDrum:false}))
+    .sort((a,b)=>a.startTime-b.startTime);
+  const lastOn={},clean=[];
+  for(const n of notes){
+    if(n.endTime-n.startTime<.06)continue;
+    const l=lastOn[n.pitch];if(l!==undefined&&n.startTime-l<.06)continue;
+    lastOn[n.pitch]=n.startTime;clean.push(n);
+  }
+  log('Lọc nhiễu: bỏ '+(notes.length-clean.length)+' nốt quá ngắn hoặc bị nhận trùng, giữ '+clean.length);
   window.PROG='';
-  return{notes:r.notes,totalTime:len/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
+  return{notes:clean,totalTime:len/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
 }
 
 function loadSky(buf){
