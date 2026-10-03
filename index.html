@@ -5,15 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MP3 → Sky Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;800&display=swap" rel="stylesheet">
-<script>/* Cờ TF.js đọc từ URL lúc nạp thư viện: giải phóng bộ nhớ GPU ngay và tắt fence WebGL (lỗi clientWaitSync trên Safari/iPhone) */
-try{const u=new URL(location.href);u.searchParams.set('tfjsflags','WEBGL_DELETE_TEXTURE_THRESHOLD:0,WEBGL_FENCE_API_ENABLED:false');history.replaceState(null,'',u)}catch(e){}</script>
+<script>try{const u=new URL(location.href);u.searchParams.set('tfjsflags','WEBGL_DELETE_TEXTURE_THRESHOLD:0,WEBGL_FENCE_API_ENABLED:false');history.replaceState(null,'',u)}catch(e){}</script>
 <script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1"></script>
 <script>try{const u=new URL(location.href);u.searchParams.delete('tfjsflags');history.replaceState(null,'',u)}catch(e){}</script>
 <style>
 :root{--bg-main:#090a0f;--bg-card:rgba(17,19,31,.65);--glass-border:rgba(255,255,255,.08);--text-main:#f8fafc;--text-muted:#94a3b8;--c-primary:#8b5cf6;--c-secondary:#ec4899;--c-accent:#06b6d4;--st-run:#a78bfa;--st-ok:#10b981;--st-err:#f43f5e;--st-wr:#f59e0b}
 *{box-sizing:border-box}
 body{margin:0;color:var(--text-main);font:14.5px/1.6 "Be Vietnam Pro",system-ui,sans-serif;min-height:100vh;background-color:var(--bg-main);background-image:radial-gradient(circle at 15% 30%,rgba(139,92,246,.15),transparent 40%),radial-gradient(circle at 85% 70%,rgba(236,72,153,.12),transparent 40%),radial-gradient(circle at 50% 0,rgba(6,182,212,.1),transparent 50%);background-attachment:fixed}
-::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:rgba(0,0,0,.2)}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:10px}::-webkit-scrollbar-thumb:hover{background:var(--c-primary)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:rgba(0,0,0,.2)}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:10px}
 main{max-width:1060px;margin:0 auto;padding:50px 20px 80px}
 h1{font-size:clamp(32px,6vw,56px);line-height:1.1;font-weight:800;letter-spacing:-.03em;margin:0 0 12px;text-align:center}
 h1 i{font-style:normal;background:linear-gradient(135deg,var(--c-accent),var(--c-primary),var(--c-secondary));background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shine 4s linear infinite}
@@ -21,10 +20,9 @@ h1 i{font-style:normal;background:linear-gradient(135deg,var(--c-accent),var(--c
 .sub{color:var(--text-muted);max-width:65ch;margin:0 auto 35px;text-align:center;font-size:15px}
 h2{font-size:18px;margin:0 0 16px;font-weight:600;display:flex;align-items:center;gap:8px}
 h2::before{content:"";width:4px;height:18px;background:linear-gradient(to bottom,var(--c-primary),var(--c-secondary));border-radius:4px}
-.card{background:var(--bg-card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:24px;padding:24px;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05);transition:border-color .3s,box-shadow .3s}
-.card:hover{border-color:rgba(255,255,255,.15)}
+.card{background:var(--bg-card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:24px;padding:24px;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05)}
 @keyframes dropPulse{0%{box-shadow:0 0 0 0 rgba(6,182,212,.3)}70%,100%{box-shadow:0 0 0 15px rgba(6,182,212,0)}}
-#drop{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,.2);border-radius:24px;padding:50px 20px;text-align:center;cursor:pointer;background:rgba(0,0,0,.2);transition:all .4s cubic-bezier(.16,1,.3,1);margin-bottom:24px}
+#drop{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,.2);border-radius:24px;padding:50px 20px;text-align:center;cursor:pointer;background:rgba(0,0,0,.2);transition:all .4s;margin-bottom:24px}
 #drop:hover,#drop.on,#drop:focus-visible{border-color:var(--c-accent);background:rgba(6,182,212,.08);transform:translateY(-4px);animation:dropPulse 1.5s infinite;outline:0}
 #drop b{display:block;font-size:20px;margin-bottom:8px}#drop span{color:var(--text-muted);font-size:13px}
 .flow{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,6fr);gap:20px;align-items:start}
@@ -37,27 +35,23 @@ h2::before{content:"";width:4px;height:18px;background:linear-gradient(to bottom
 #steps li[data-st=ok]{border-color:rgba(16,185,129,.3)}#steps li[data-st=ok] .dot{background:var(--st-ok);box-shadow:0 0 10px rgba(16,185,129,.5),0 0 0 4px rgba(16,185,129,.1)}
 #steps li[data-st=err]{border-color:rgba(244,63,94,.3)}#steps li[data-st=err] .dot{background:var(--st-err)}
 @keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(167,139,250,.6)}70%,100%{box-shadow:0 0 0 10px rgba(167,139,250,0)}}
-#log{height:280px;overflow:auto;background:#050608;border:1px solid var(--glass-border);border-radius:16px;padding:16px;font:13px/1.7 "Fira Code",ui-monospace,Menlo,Consolas,monospace}
-#log div{display:flex;gap:12px;margin-bottom:4px;animation:slideUp .3s ease-out}
-@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+#log{height:280px;overflow:auto;background:#050608;border:1px solid var(--glass-border);border-radius:16px;padding:16px;font:13px/1.7 ui-monospace,Menlo,Consolas,monospace}
+#log div{display:flex;gap:12px;margin-bottom:4px}
 #log time{color:#475569;flex:none;user-select:none}#log span{overflow-wrap:anywhere;color:#cbd5e1}
 #log .ok span{color:var(--st-ok)}#log .err span{color:var(--st-err)}#log .wr span{color:var(--st-wr)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:10px}
 label{display:flex;flex-direction:column;font-size:13px;color:var(--text-muted);font-weight:500}
-input[type=text],input[type=number],input[type=url],select,textarea{width:100%;margin-top:6px;background:rgba(0,0,0,.3);color:var(--text-main);border:1px solid var(--glass-border);border-radius:12px;padding:10px 14px;font:inherit;transition:all .3s}
+input[type=text],input[type=number],input[type=url],select,textarea{width:100%;margin-top:6px;background:rgba(0,0,0,.3);color:var(--text-main);border:1px solid var(--glass-border);border-radius:12px;padding:10px 14px;font:inherit}
 input:focus-visible,select:focus-visible,textarea:focus-visible,.btn:focus-visible,.key:focus-visible{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 4px rgba(6,182,212,.2)}
 input[type=checkbox]{accent-color:var(--c-accent);width:16px;height:16px;cursor:pointer}
 label:has(input[type=checkbox]){flex-direction:row;align-items:center;gap:8px;color:var(--text-main);margin-bottom:4px;cursor:pointer}
-.btn{background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer;transition:all .3s cubic-bezier(.34,1.56,.64,1);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn{background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer;transition:all .3s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
 .btn:hover{transform:translateY(-3px);box-shadow:0 10px 25px rgba(236,72,153,.4)}
 .btn:active{transform:scale(.95)}
 .btn.sec{background:rgba(255,255,255,.05);color:var(--text-main);border:1px solid var(--glass-border)}
-.btn.sec:hover{background:rgba(255,255,255,.1);box-shadow:0 8px 20px rgba(0,0,0,.3)}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
 summary{cursor:pointer;color:var(--c-accent);font-weight:600;margin-bottom:12px;outline:none;list-style:none;display:inline-flex;align-items:center}
 summary::-webkit-details-marker{display:none}summary::before{content:'▸';margin-right:8px;transition:transform .3s}details[open] summary::before{transform:rotate(90deg)}
-
-/* Bàn phím Sky: lưới 3 hàng x 5 cột, hình vẽ bằng SVG */
 #keys{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:420px;margin:20px auto 24px;padding:16px;background:#162235;border-radius:18px;box-shadow:inset 0 0 20px rgba(0,0,0,.3)}
 .key{aspect-ratio:1;background:#223a5c;border-radius:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform .12s,background .12s,box-shadow .12s}
 .key svg{width:100%;height:100%;fill:none;stroke:#fff;stroke-width:1.6px;stroke-linejoin:miter;pointer-events:none}
@@ -65,12 +59,11 @@ summary::-webkit-details-marker{display:none}summary::before{content:'▸';margi
 .key:hover{background:#2c4a73}
 .key.hit{transform:scale(.92);background:#fdf0cc;box-shadow:0 0 22px rgba(253,240,204,.55)}
 .key.hit svg{stroke:#1b3052}
-
 #stats{color:var(--text-muted);font-size:13px;text-align:center;margin-top:16px;font-weight:500}
 #rollbox{overflow-x:auto;margin-top:16px;border:1px solid var(--glass-border);border-radius:12px;background:#050608}
 #roll{display:block}
 #rep{font-size:14px;line-height:1.7;margin-top:16px;color:var(--text-muted);background:rgba(0,0,0,.2);padding:16px;border-radius:12px}#rep b{color:var(--c-accent);font-weight:600}
-textarea{height:130px;font-family:"Fira Code",monospace;font-size:12px}
+textarea{height:130px;font-family:monospace;font-size:12px}
 [hidden]{display:none!important}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -159,9 +152,8 @@ textarea{height:130px;font-family:"Fira Code",monospace;font-size:12px}
 </div>
 </main>
 <script>
-
 const $=s=>document.querySelector(s);
-const SC=[0,2,4,5,7,9,11],NAMES=['C','D','E','F','G','A','B'];
+const SC=[0,2,4,5,7,9,11];
 const keyMidi=i=>60+12*Math.floor(i/7)+SC[i%7];
 const CKPT='https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
 let tracks=[],tempos=[],division=480,song=null,fileName='bai-nhac',ctx=null,timers=[],model=null,midiBytes=null,T0=performance.now(),busy=0;
@@ -178,7 +170,6 @@ const frame=()=>new Promise(r=>setTimeout(r,30));
 
 /* ---------- Bàn phím 15 nút + nghe thử ---------- */
 const keysEl=$('#keys');
-/* c = thoi bao quanh tròn, d = thoi, o = tròn (đúng bố cục ảnh Sky: 3 hàng x 5 cột) */
 const SH=['c','d','o','d','o','o','d','c','d','o','o','d','o','d','c'];
 const SVGS={o:'<circle cx="50" cy="50" r="25"/>',d:'<path d="M50 20L80 50L50 80L20 50Z"/>',c:'<path d="M50 12L88 50L50 88L12 50Z"/><circle cx="50" cy="50" r="27"/>'};
 for(let i=0;i<15;i++){
@@ -188,7 +179,6 @@ for(let i=0;i<15;i++){
   keysEl.appendChild(b);
 }
 function flash(i,ms){const e=$('#k'+i);e.classList.add('hit');setTimeout(()=>e.classList.remove('hit'),ms)}
-/* Mọi âm thanh đi qua một "master"; Dừng = tắt và ngắt master nên nốt đã hẹn giờ cũng im ngay */
 let master=null,sched=null;
 function out(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(!master){master=ctx.createGain();master.connect(ctx.destination)}return master}
 function tone(i,delay){
@@ -211,7 +201,6 @@ $('#bPlay').onclick=()=>{
   const ev=song.songNotes.map(n=>({i:+n.key.replace(/^\dKey/,''),t:Math.floor(n.time/Lg)*Lg})).sort((a,b)=>a.t-b.t);
   if(!ev.length)return;
   const t0=ev[0].t,st=ctx.currentTime+.15;let k=0;
-  /* Hẹn giờ dần từng đợt 2 giây thay vì hẹn cả bài một lúc */
   const pump=()=>{
     const now=ctx.currentTime;
     while(k<ev.length&&st+(ev[k].t-t0)/1000<now+2){
@@ -284,7 +273,6 @@ async function convert(){
   step(1,'run','Đang quy đổi…');log('Bắt đầu quy đổi '+all.length+' nốt sang 15 phím Sky');
   await frame();if(run!==busy)return;
   try{
-  /* 1) Dịch tông + quãng tám */
   const hist=new Array(128).fill(0);all.forEach(n=>hist[n.n]++);
   const shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
   let bc=Infinity,sh=0,oc=0;
@@ -302,12 +290,10 @@ async function convert(){
   let prev=null;
   for(const p of pts){const r=mapPitch(p.m,prev,mode);p.key=r.i;p.acc=r.acc;p.fold=r.k;prev=r.i}
 
-  /* 2) Gom nốt cùng lúc (15ms) */
   const on=[];
   for(const p of pts){const o=on[on.length-1];if(o&&p.t-o.t<=15)o.list.push(p);else on.push({t:p.t,list:[p]})}
   log('Gom thành '+on.length+' thời điểm đánh');
 
-  /* 3) Dò BPM */
   log('Đang dò BPM của game…');await frame();if(run!==busy)return;
   const manual=+$('#bpmfix').value,dec=$('#dec').checked,sus=+$('#sus').value;
   const tolIn=parseFloat($('#tol').value),tolMs=Math.max(.01,isNaN(tolIn)?0:tolIn);
@@ -326,8 +312,6 @@ async function convert(){
   let g;
   if(manual>0)g=evalB(manual,on);
   else if(fromAudio&&on.length>8){
-    /* Nốt nhận dạng từ âm thanh có vài nốt lệch xa, nên bản cũ bị ép chọn lưới rất mịn/lộn xộn. Giờ chấm độ khớp tổng thể
-       của mọi nốt với từng lưới, lấy lưới THÔ nhất còn giữ >= 95% độ khớp tốt nhất, rồi gióng mọi nốt vào ô: nhịp đều và sạch. */
     const hiB=Math.min(maxB,900),loB=Math.min(150,hiB),sc=[];
     for(let b=loB;b<=hiB;b++){const L=60000/b;let c=0,s=0;for(const o of on){const a=o.t/L*2*Math.PI;c+=Math.cos(a);s+=Math.sin(a)}sc.push({b,R:Math.hypot(c,s)/on.length})}
     const Rm=Math.max(...sc.map(x=>x.R)),pick=sc.find(x=>x.R>=.95*Rm);
@@ -345,7 +329,6 @@ async function convert(){
   const bpm=g.bpm,Lg=60000/bpm;
   log('BPM game = '+bpm+' (1 ô = '+Lg.toFixed(2)+' ms), lệch tối đa '+g.mx.toFixed(2)+' ms','ok');
 
-  /* 4) Xếp ô */
   const START=4,errs=[],cellKeys=new Map();
   let last=-1e9,c0=null,pushed=0,cLast=0;
   for(const o of on){
@@ -378,7 +361,6 @@ async function convert(){
     [...cellKeys.get(c)].sort((a,b)=>a-b).forEach(k=>notes.push({time:t,key:'1Key'+k}));
   }
 
-  /* 5) Báo cáo */
   let exact=0,acc=0,fold=0,drop=0;
   for(const o of on)for(const p of o.list){
     if(!o.kept.has(p.key)){drop++;continue}
@@ -474,6 +456,16 @@ function resetRun(){
   [0,1,2,3].forEach(i=>step(i,'idle','Chờ…'));
 }
 $('#bOpen').onclick=()=>mp3Url&&window.open(mp3Url,'_blank','noopener');
+
+/* ---------- Mô hình: nạp ngầm ngay khi mở trang ---------- */
+let warmP=null;
+function warmModel(){
+  if(model||warmP||!window.mm)return warmP;
+  warmP=(async()=>{const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã nạp sẵn ở nền','ok')})()
+    .catch(()=>{warmP=null;log('Nạp nền chưa được, sẽ nạp khi bắt đầu','wr')});
+  return warmP;
+}
+
 async function load(f,keep){
   if(!f)return;
   if(!keep){resetRun();step(3,'ok','Bỏ qua: dùng file có sẵn')}
@@ -492,6 +484,7 @@ async function load(f,keep){
     }else{
       step(0,'run','Đang chuẩn bị…');
       if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
+      if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
       if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
       log('Giải mã âm thanh (16 kHz mono) rồi nhận dạng nốt piano. Có thể mất vài phút…');
       const ns=await transcribe(buf);
@@ -500,7 +493,7 @@ async function load(f,keep){
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
-      tempos=[{tick:0,us:1000000}];division=1000;fromAudio=true;      // 1 tick = 1 ms
+      tempos=[{tick:0,us:1000000}];division=1000;fromAudio=true;
       $('#tol').value=35;$('#name').value=fileName;
       log('Tự điền sai số 35 ms vì thời gian nốt nhận dạng từ âm thanh không tròn nhịp');
       showTracks();await convert();
@@ -510,7 +503,8 @@ async function load(f,keep){
     if(/WebGL|sync|context/i.test(String(e.message||e)))log('Gợi ý: GPU của trình duyệt bị lỗi hoặc hết bộ nhớ. Đóng bớt tab, tải lại trang rồi thử lại, hoặc dùng máy tính.','wr');
   }finally{clearInterval(timer)}
 }
-/* ---------- Dán link TikTok: lấy MP3 rồi chạy tiếp nhận dạng → Sky ---------- */
+
+/* ---------- Dán link TikTok ---------- */
 const API_URL='https://www.tikwm.com/api/';
 const absUrl=u=>!u?'':u.startsWith('//')?'https:'+u:u.startsWith('/')?'https://www.tikwm.com'+u:u;
 $('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){log('Trình duyệt không cho đọc clipboard, hãy dán bằng Ctrl+V','wr')}};
@@ -518,7 +512,7 @@ $('#linkForm').addEventListener('submit',async e=>{
   e.preventDefault();const link=$('#url').value.trim(),go=$('#go');
   resetRun();
   if(!/tiktok\.com/i.test(link)){step(3,'err','Link không hợp lệ');log('Link không hợp lệ: hãy dán link từ tiktok.com hoặc vm.tiktok.com','err');return}
-  go.disabled=true;
+  go.disabled=true;warmModel();
   try{
     step(3,'run','Đang lấy thông tin video…');log('Gọi API lấy thông tin video TikTok…');
     const res=await fetch(API_URL+'?url='+encodeURIComponent(link));
@@ -544,11 +538,36 @@ $('#linkForm').addEventListener('submit',async e=>{
     step(3,'err','Lỗi');log('Lỗi: '+m,'err');
   }finally{go.disabled=false}
 });
-/* ---------- Nhận dạng tiết kiệm bộ nhớ ----------
-   Bản cũ đưa cả file (đã giải mã 44.1 kHz stereo) vào mô hình một lần nên máy yếu/iPhone hết RAM và trang tự tải lại.
-   Giờ: giải mã thẳng ở 16 kHz mono (nhẹ hơn ~11 lần), cắt thành đoạn 30 giây (chồng 1,5 giây ở hai đầu để nốt ở mép không bị cụt),
-   nhận dạng từng đoạn, nhường giao diện giữa các đoạn và báo tiến độ. */
-/* Khi WebGL bị mất (hết RAM GPU): bỏ mô hình cũ, chuyển sang CPU nếu truy cập được TF.js, rồi nạp lại mô hình */
+
+/* ---------- "Máy ảo" = Web Worker: luồng riêng, bộ nhớ riêng ----------
+   Worker giữ toàn bộ âm thanh mono, trộn kênh, đổi tần số, cắt đoạn, đo độ lớn và lọc nốt nhiễu.
+   Trang chính chỉ giữ mô hình + một đoạn nhỏ nên nhanh hơn và đỡ tràn RAM (iPhone). */
+const WSRC=`
+let mono=null,n=1;
+onmessage=e=>{const m=e.data;
+ if(m.t==='init'){mono=new Float32Array(m.len);n=m.nch;postMessage({})}
+ else if(m.t==='add'){const d=m.d;for(let i=0;i<d.length;i++)mono[i]+=d[i]/n;postMessage({})}
+ else if(m.t==='fin'){
+  if(m.from!==m.SR){const r=m.from/m.SR,k=Math.floor(mono.length/r),y=new Float32Array(k);
+   for(let i=0;i<k;i++){const q=i*r,j=q|0,f=q-j;y[i]=mono[j]*(1-f)+(mono[j+1]||0)*f}mono=y}
+  postMessage({len:mono.length})}
+ else if(m.t==='chunk'){
+  const s=mono.slice(m.a,m.b);let r=0,c=0;for(let i=0;i<s.length;i+=4){r+=s[i]*s[i];c++}
+  postMessage({seg:s,rms:Math.sqrt(r/Math.max(1,c))},[s.buffer])}
+ else if(m.t==='clean'){
+  const ns=m.notes.sort((a,b)=>a.startTime-b.startTime),last={},out=[];
+  for(const x of ns){
+   if(x.endTime-x.startTime<.06)continue;
+   const l=last[x.pitch];if(l!==undefined&&x.startTime-l<.06)continue;
+   last[x.pitch]=x.startTime;out.push(x)}
+  postMessage({notes:out,dropped:ns.length-out.length})}
+ else if(m.t==='free'){mono=null;postMessage({})}
+};`;
+let worker=null;
+const mkWorker=()=>worker||(worker=new Worker(URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'}))));
+const ask=(m,tr)=>new Promise((res,rej)=>{const w=mkWorker();w.onmessage=e=>res(e.data);w.onerror=e=>rej(new Error(e.message||'Lỗi luồng nền'));w.postMessage(m,tr||[])});
+
+/* Khi WebGL bị mất: bỏ mô hình cũ, chuyển sang CPU nếu được, nạp lại */
 async function recover(){
   try{model.dispose&&model.dispose()}catch(e){}
   const T=window.tf||(window.mm&&mm.tf);
@@ -557,20 +576,28 @@ async function recover(){
 }
 async function transcribe(buf){
   const SR=16000,AC=window.AudioContext||window.webkitAudioContext,dctx=new AC({sampleRate:SR});
-  let ab=await dctx.decodeAudioData(buf),mono=new Float32Array(ab.length),from=ab.sampleRate;
-  for(let c=0;c<ab.numberOfChannels;c++){const d=ab.getChannelData(c);for(let i=0;i<mono.length;i++)mono[i]+=d[i]/ab.numberOfChannels}
-  ab=null;
-  if(from!==SR){const r=from/SR,m=Math.floor(mono.length/r),y=new Float32Array(m);
-    for(let i=0;i<m;i++){const q=i*r,k=q|0,f=q-k;y[i]=mono[k]*(1-f)+(mono[k+1]||0)*f}mono=y}
-  const C=20*SR,OV=512*48,total=Math.max(1,Math.ceil(mono.length/C)),notes=[];
-  log('Âm thanh dài '+(mono.length/SR).toFixed(1)+' giây, chia '+total+' đoạn để đỡ tốn bộ nhớ');
+  let ab=await dctx.decodeAudioData(buf);
+  const nch=ab.numberOfChannels,from=ab.sampleRate;
+  await ask({t:'init',len:ab.length,nch});
+  for(let c=0;c<nch;c++){const d=ab.getChannelData(c).slice();await ask({t:'add',d},[d.buffer])}
+  ab=null;dctx.close&&dctx.close();
+  const len=(await ask({t:'fin',from,SR})).len;
+  /* Cỡ đoạn theo thiết bị: iPhone 15 s, máy >=8 GB RAM 40 s, còn lại 20 s; chồng 1,5 s hai đầu để nốt ở mép không bị cụt */
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent),mem=navigator.deviceMemory||4;
+  const C=(ios?15:mem>=8?40:20)*SR,OV=512*48,total=Math.max(1,Math.ceil(len/C)),notes=[];
+  log('Âm thanh dài '+(len/SR).toFixed(1)+' giây, chia '+total+' đoạn (luồng nền giữ bộ nhớ)');
+  const actx=new AC({sampleRate:SR});
   const run=seg=>model.transcribeFromAudioArray?model.transcribeFromAudioArray(seg)
-    :(b=>(b.copyToChannel(seg,0),model.transcribeFromAudioBuffer(b)))(dctx.createBuffer(1,seg.length,SR));
+    :(b=>(b.copyToChannel(seg,0),model.transcribeFromAudioBuffer(b)))(actx.createBuffer(1,seg.length,SR));
+  let skipped=0;
   for(let k=0;k<total;k++){
-    const s0=k*C,a=Math.max(0,s0-OV),b=Math.min(mono.length,s0+C+OV),off=a/SR,lo=s0/SR,hi=(s0+C)/SR;
+    const s0=k*C,a=Math.max(0,s0-OV),b=Math.min(len,s0+C+OV),off=a/SR,lo=s0/SR,hi=(s0+C)/SR;
+    const ch=await ask({t:'chunk',a,b});
+    window.PROG=' · đoạn '+(k+1)+'/'+total;
+    if(ch.rms<0.0015){skipped++;log('Đoạn '+(k+1)+'/'+total+' im lặng, bỏ qua');continue}
     let ns;
     for(let tries=0;;){
-      try{ns=await run(mono.slice(a,b));break}
+      try{ns=await run(ch.seg);break}
       catch(err){
         if(++tries>2)throw err;
         log('Đoạn '+(k+1)+' lỗi ('+(err.message||err)+'), đang khôi phục rồi thử lại…','wr');
@@ -579,21 +606,19 @@ async function transcribe(buf){
     }
     for(const n of ns.notes){const st=(n.startTime||0)+off;
       if(st>=lo&&(st<hi||k===total-1))notes.push({pitch:n.pitch,velocity:n.velocity,startTime:st,endTime:n.endTime+off,instrument:0,program:0,isDrum:false})}
-    window.PROG=' · đoạn '+(k+1)+'/'+total;
     log('Xong đoạn '+(k+1)+'/'+total+' ('+notes.length+' nốt)');
-    await new Promise(r=>setTimeout(r,60));              // nhường giao diện, cho trình duyệt dọn bộ nhớ
+    await new Promise(r=>setTimeout(r,0));
   }
-  notes.sort((a,b)=>a.startTime-b.startTime);
-  const lastOn={},clean=[];
-  for(const n of notes){
-    if(n.endTime-n.startTime<.06)continue;                              // nốt cực ngắn: thường là nhiễu
-    const l=lastOn[n.pitch];if(l!==undefined&&n.startTime-l<.06)continue; // cùng cao độ bị nhận trùng
-    lastOn[n.pitch]=n.startTime;clean.push(n);
-  }
-  log('Lọc nhiễu: bỏ '+(notes.length-clean.length)+' nốt quá ngắn hoặc bị nhận trùng, giữ '+clean.length);
-  window.PROG='';dctx.close&&dctx.close();
-  return{notes:clean,totalTime:mono.length/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
+  await ask({t:'free'});actx.close&&actx.close();
+  const T=window.tf||(window.mm&&mm.tf);
+  try{if(T&&T.memory)log('Bộ nhớ TF.js: '+T.memory().numTensors+' tensor, '+(T.memory().numBytes/1048576).toFixed(1)+' MB')}catch(e){}
+  if(skipped)log('Bỏ qua '+skipped+' đoạn im lặng nên chạy nhanh hơn','ok');
+  const r=await ask({t:'clean',notes});
+  log('Lọc nhiễu: bỏ '+r.dropped+' nốt quá ngắn hoặc nhận trùng, giữ '+r.notes.length);
+  window.PROG='';
+  return{notes:r.notes,totalTime:len/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
 }
+
 function loadSky(buf){
   const u=new Uint8Array(buf);let txt;
   if(u[0]===0xFF&&u[1]===0xFE)txt=new TextDecoder('utf-16le').decode(buf);
@@ -613,7 +638,7 @@ function loadSky(buf){
 ['#tr','#poly','#bpmfix','#tol','#maxbpm','#sus','#speed','#oct','#acc','#dec'].forEach(s=>$(s).addEventListener('change',()=>{if(tracks.length){log('Đổi tuỳ chọn, quy đổi lại…');convert()}}));
 $('#tracks').addEventListener('change',()=>convert());
 log('Sẵn sàng. Chọn một file để bắt đầu.');
-
+setTimeout(warmModel,600);
 </script>
 </body>
 </html>
