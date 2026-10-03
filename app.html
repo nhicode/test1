@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MP3 → Sky Studio</title>
+<script>window.TONE_SILENCE_LOGGING=true</script>
 <script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.js"></script>
 <style>
@@ -41,6 +42,8 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 
 <section id="drop">
   <p>Chọn hoặc kéo file vào đây: MP3, WAV, FLAC, M4A, OGG · MIDI · file Sky .txt/.json</p>
+  <label>Nhạc cụ trong file (chọn trước khi tải file)
+    <select id="srcinst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label>
   <input id="file" type="file" accept=".mp3,.wav,.flac,.m4a,.ogg,.mid,.midi,.txt,.json,.skysheet,audio/*">
 </section>
 
@@ -64,7 +67,7 @@ textarea{height:120px;font:12px ui-monospace,monospace}
     <label>BPM của game (trống = tự dò)<input id="bpmfix" type="number" min="30" max="2000" step="any"></label>
     <label>Sai số cho phép (ms)<input id="tol" type="number" value="0" min="0" step="any"></label>
     <label>BPM tối đa của game<input id="maxbpm" type="number" value="1000" min="60" max="2000"></label>
-    <label>Nốt kéo dài (lặp lại)
+    <label>Nốt giữ / kéo dài (lặp theo ô nhịp, hợp với guitar)
       <select id="sus"><option value="0">Tắt</option><option value="150">Lặp mỗi 150 ms</option><option value="250">Lặp mỗi 250 ms</option><option value="400">Lặp mỗi 400 ms</option></select></label>
     <label>Dịch tông (nửa cung)
       <select id="tr"><option value="auto">Tự động (khớp C trưởng)</option></select></label>
@@ -83,12 +86,14 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 
 <section id="mplay" hidden>
   <h2>Nghe MIDI</h2>
+  <label>Âm thanh nghe thử <select class="pinst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label>
   <div class="ctr"><button id="bMPlay">▶ Phát MIDI</button> <button id="bMStop">■ Dừng</button>
   <p id="mTime">Phát các track đang chọn, đúng cao độ gốc (chưa quy đổi sang Sky).</p></div>
 </section>
 
 <section id="play" hidden>
   <h2>Nghe thử</h2>
+  <label>Âm thanh nghe thử <select class="pinst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label>
   <div id="keys"></div>
   <div class="ctr"><button id="bPlay">▶ Phát nhạc</button> <button id="bStop">■ Dừng</button>
   <p id="stats"></p></div>
@@ -104,6 +109,8 @@ textarea{height:120px;font:12px ui-monospace,monospace}
   <details><summary>Xem JSON</summary><textarea id="json" readonly></textarea></details>
 </section>
 
+<script id="bpsrc" type="text/plain">var BP=(()=>{var st=Object.create;var P=Object.defineProperty;var ot=Object.getOwnPropertyDescriptor;var rt=Object.getOwnPropertyNames;var at=Object.getPrototypeOf,ct=Object.prototype.hasOwnProperty;var v=(e,t)=>()=>{try{return t||e((t={exports:{}}).exports,t),t.exports}catch(i){throw t=0,i}},lt=(e,t)=>{for(var i in t)P(e,i,{get:t[i],enumerable:!0})},z=(e,t,i,s)=>{if(t&&typeof t=="object"||typeof t=="function")for(let n of rt(t))!ct.call(e,n)&&n!==i&&P(e,n,{get:()=>t[n],enumerable:!(s=ot(t,n))||s.enumerable});return e};var B=(e,t,i)=>(i=e!=null?st(at(e)):{},z(t||!e||!e.__esModule?P(i,"default",{value:e,enumerable:!0}):i,e)),ut=e=>z(P({},"__esModule",{value:!0}),e);var W=v((Dt,k)=>{k.exports=globalThis.tf});var Z=v((yt,Y)=>{Y.exports={}});var Rt={};lt(Rt,{BasicPitch:()=>b,noteFramesToTime:()=>nt,outputToNotesPoly:()=>et});var g=B(W()),q={contours:"Identity",onsets:"Identity_2",frames:"Identity_1"},j=1,w=22050,U=256,ht=Math.floor(w/U),mt=2,Q=w*mt-U,X=30,V=Math.floor(X/2),D=X*U,dt=Q-D,b=class{constructor(t){if(D%2!==0)throw new Error(`OVERLAP_LENGTH_FRAMES is not divisible by 2! Is ${D}`);this.model=typeof t=="string"?g.loadGraphModel(t):t}adjustNoteStart(t,i){return t.map(s=>({startTimeSeconds:s.startTimeSeconds+i,durationSeconds:s.durationSeconds,pitch_midi:s.pitchMidi,amplitude:s.amplitude,pitchBends:s.pitchBends}))}async evaluateSingleFrame(t,i){let s=await this.model,n=g.slice(t,i,1),o=s.execute(n,[q.frames,q.onsets,q.contours]);return[o[0],o[1],o[2]]}async prepareData(t){let i=g.concat1d([g.zeros([Math.floor(D/2)],"float32"),g.tensor(t)]);return[g.expandDims(g.signal.frame(i,Q,dt,!0,0),-1),t.length]}unwrapOutput(t){let i=t;i=t.slice([0,V,0],[-1,t.shape[1]-2*V,-1]);let s=i.shape;return i.reshape([s[0]*s[1],s[2]])}async evaluateModel(t,i,s){let n;if(t instanceof Float32Array)n=t;else{if(t.sampleRate!==w)throw new Error(`Input audio buffer is not at correct sample rate! Is ${t.sampleRate}. Should be ${w}`);if(t.numberOfChannels!==j)throw new Error(`Input audio buffer is not mono! Number of channels is ${t.numberOfChannels}. Should be ${j}`);n=t.getChannelData(0)}let[o,d]=await this.prepareData(n),l=Math.floor(d*(ht/w)),m=0;for(let f=0;f<o.shape[0];++f){s(f/o.shape[0]);let[p,M,O]=await this.evaluateSingleFrame(o,f),A=this.unwrapOutput(p),N=this.unwrapOutput(M),_=this.unwrapOutput(O),u=A.shape[0];if(!(m>=l)){if(u+m>=l){let x=l-m;A=A.slice([0,0],[x,-1]),N=N.slice([0,0],[x,-1]),_=_.slice([0,0],[x,-1])}m+=u,i(await A.array(),await N.array(),await _.array())}}s(1)}};var ft=B(Z()),y=21,L=22050,K=2,I=256,pt=Math.floor(L/I),tt=pt*K,gt=L*K-I,Mt=I/L*(tt-gt/I)+.0018,C=87,Ot=3;var St=88,Lt=St*Ot,J=e=>12*(Math.log2(e)-Math.log2(440))+69;var G=e=>e*I/L-Mt*Math.floor(e/tt);function At(e){return e.length===0?null:e.reduce((t,i,s)=>e[t]>i?t:s,-1)}function Et(e,t){let i=[],s=[];for(let n=0;n<e.length;n++)for(let o=0;o<e[n].length;o++)e[n][o]>t&&(i.push(n),s.push(o));return[i,s]}function Ft(e){let[t,i,s]=e.reduce((d,l)=>{let[m,f,p]=l.reduce((M,O)=>[M[0]+O,M[1]+O*O,M[2]+1],[0,0,0]);return[d[0]+m,d[1]+f,d[2]+p]},[0,0,0]),n=t/s,o=Math.sqrt(1/(s-1)*(i-t*t/s));return[n,o]}function H(e){return e.reduce((t,i)=>Math.max(t,...i),0)}function Nt(e){let t=e[0].map(i=>i.slice());for(let i=1;i<e.length;++i)for(let s=0;s<e[0].length;++s)for(let n=0;n<e[0][0].length;++n)t[s][n]=Math.min(t[s][n],e[i][s][n]);return t}function Tt(e,t=1){let i=[];for(let s=0;s<e[0].length;++s)for(let n=0;n<e.length;++n){let o=!0;for(let d=Math.max(0,n-t);o&&d<=Math.min(e.length-1,n+t);++d)d!==n&&(o=o&&e[n][s]>e[d][s]);o&&i.push([n,s])}return i}function _t(e){let t=e[0].map(i=>i.slice());for(let i=1;i<e.length;++i)for(let s=0;s<e[0].length;++s)for(let n=0;n<e[0][0].length;++n)t[s][n]=Math.max(t[s][n],e[i][s][n]);return t}function xt(e){return e!==null}function wt(e,t,i,s){if(i){let n=J(i)-y;for(let o=0;o<e.length;o++)e[o].fill(0,n);for(let o=0;o<t.length;o++)t[o].fill(0,n)}if(s){let n=J(s)-y;for(let o=0;o<e.length;o++)e[o].fill(0,0,n);for(let o=0;o<t.length;o++)t[o].fill(0,0,n)}}function It(e,t,i=2){let s=Array.from(Array(i).keys()).map(l=>l+1).map(l=>{let m=Array(l).fill(Array(t[0].length).fill(0)).concat(t),f=m.slice(l),p=m.slice(0,-l);if(f.length!==p.length)throw new Error(`nPlus length !== minusN length: ${f.length} !== ${p.length}`);return f.map((M,O)=>M.map((A,N)=>A-p[O][N]))}),n=Nt(s);n=n.map(l=>l.map(m=>Math.max(m,0))),n=n.map((l,m)=>m<i?l.fill(0):l);let o=H(e),d=H(n);return n=n.map(l=>l.map(m=>o*m/d)),_t([e,n])}function et(e,t,i=.5,s=.3,n=5,o=!0,d=null,l=null,m=!0,f=11){let p=s;if(p===null){let[c,a]=Ft(e);p=c+a}let M=e.length;wt(t,e,d,l);let O=t;o&&(O=It(t,e));let A=O.map(c=>c.map(()=>0));Tt(O).forEach(([c,a])=>{A[c][a]=O[c][a]});let[N,_]=Et(A,i);N.reverse(),_.reverse();let u=e.map(c=>c.slice()),x=N.map((c,a)=>{let r=_[a];if(c>=M-1)return null;let h=c+1,S=0;for(;h<M-1&&S<f;)u[h][r]<p?S+=1:S=0,h+=1;if(h-=S,h-c<=n)return null;for(let F=c;F<h;++F)u[F][r]=0,r<C&&(u[F][r+1]=0),r>0&&(u[F][r-1]=0);let E=e.slice(c,h).reduce((F,T)=>F+T[r],0)/(h-c);return{startFrame:c,durationFrames:h-c,pitchMidi:r+y,amplitude:E}}).filter(xt);if(m===!0)for(;H(u)>p;){let[c,a]=u.reduce((T,R,it)=>{let $=At(R);return R[$]>u[T[0]][T[1]]?[it,$]:T},[0,0]);u[c][a]=0;let r=c+1,h=0;for(;r<M-1&&h<f;)u[r][a]<p?h+=1:h=0,u[r][a]=0,a<C&&(u[r][a+1]=0),a>0&&(u[r][a-1]=0),r+=1;let S=r-1-h;for(r=c-1,h=0;r>0&&h<f;)u[r][a]<p?h+=1:h=0,u[r][a]=0,a<C&&(u[r][a+1]=0),a>0&&(u[r][a-1]=0),r-=1;let E=r+1+h;if(E<0)throw new Error(`iStart is not positive! value: ${E}`);if(S>=M)throw new Error(`iEnd is past end of times. (iEnd, times.length): (${S}, ${M})`);let F=e.slice(E,S).reduce((T,R)=>T+R[a],0)/(S-E);S-E<=n||x.push({startFrame:E,durationFrames:S-E,pitchMidi:a+y,amplitude:F})}return x}var nt=e=>e.map(t=>({pitchMidi:t.pitchMidi,amplitude:t.amplitude,pitchBends:t.pitchBends,startTimeSeconds:G(t.startFrame),durationSeconds:G(t.startFrame+t.durationFrames)-G(t.startFrame)}));return ut(Rt);})();
+</script>
 <script>
 const $=s=>document.querySelector(s);
 const SC=[0,2,4,5,7,9,11];
@@ -132,25 +139,31 @@ const frame=()=>new Promise(r=>setTimeout(r,30));
 const SAL='https://tonejs.github.io/audio/salamander/';
 const noteName=m=>Tone.Frequency(m,'midi').toNote();
 const fmtT=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0');
-let inst=null,instP=null,part=null,ui=null,playTk=0;
-function loadPiano(){
-  if(instP)return instP;
-  instP=(async()=>{
+let inst=null,part=null,ui=null,playTk=0;
+const INST={
+  piano:{base:SAL,keys:['A1','C2','A2','C3','A3','C4','A4','C5','A5','C6','A6','C7'],rel:1},
+  guitar:{base:'https://cdn.jsdelivr.net/gh/nbrosowsky/tonejs-instruments@master/samples/guitar-acoustic/',keys:['E2','A2','D3','G3','B3','E4','A4','C5'],rel:.7}
+};
+const instCache={},pinst=()=>document.querySelector('.pinst').value;
+function loadInst(kind){
+  if(!INST[kind])kind='piano';
+  if(instCache[kind])return instCache[kind];
+  return instCache[kind]=(async()=>{
     try{
-      log('Tải âm piano (Tone.js '+Tone.version+')…');
-      const smp=await new Promise((res,rej)=>{
-        const u={};['A1','C2','A2','C3','A3','C4','A4','C5','A5','C6','A6','C7'].forEach(k=>u[k]=k+'.mp3');
-        const sm=new Tone.Sampler({urls:u,baseUrl:SAL,release:1,onload:()=>res(sm),onerror:rej}).toDestination();
+      log('Tải âm '+kind+' (Tone.js '+Tone.version+')…');
+      if(Tone.version!=='15.1.22')log('Cảnh báo: Tone.js đang chạy bản '+Tone.version,'wr');
+      const c=INST[kind],smp=await new Promise((res,rej)=>{
+        const u={};c.keys.forEach(k=>u[k]=k+'.mp3');
+        const sm=new Tone.Sampler({urls:u,baseUrl:c.base,release:c.rel,onload:()=>res(sm),onerror:rej}).toDestination();
         setTimeout(()=>rej(new Error('quá thời gian')),20000);
       });
-      log('Âm piano đã sẵn sàng','ok');return smp;
+      log('Âm '+kind+' đã sẵn sàng','ok');return smp;
     }catch(e){
-      log('Không tải được âm piano mẫu ('+(e.message||e)+'), dùng âm tổng hợp','wr');
-      const p=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'triangle'},envelope:{attack:.005,decay:.3,sustain:.2,release:.8}});
+      log('Không tải được âm '+kind+' mẫu ('+(e.message||e)+'), dùng âm tổng hợp','wr');
+      const p=new Tone.PolySynth(Tone.Synth,{oscillator:{type:kind==='guitar'?'triangle':'triangle'},envelope:{attack:.005,decay:kind==='guitar'?.5:.3,sustain:.1,release:.6}});
       p.volume.value=-8;return p.toDestination();
     }
   })();
-  return instP;
 }
 function stop(){
   playTk++;clearInterval(ui);ui=null;
@@ -161,7 +174,7 @@ function stop(){
 async function play(events,cb,dur,tick,done){
   stop();const tk=playTk;
   if(!window.Tone){log('Không tải được Tone.js, hãy kiểm tra kết nối internet.','err');return}
-  await Tone.start();const s=await loadPiano();if(tk!==playTk)return;
+  await Tone.start();const s=await loadInst(pinst());if(tk!==playTk)return;
   inst=s;
   part=new Tone.Part((t,e)=>cb(t,e,s),events).start(0);
   Tone.Transport.start('+0.1');
@@ -178,7 +191,7 @@ for(let i=0;i<15;i++){
   b.innerHTML='<svg viewBox="0 0 100 100" aria-hidden="true">'+SVGS[SH[i]]+'</svg>';
   b.addEventListener('pointerdown',async()=>{
     flash(i,160);if(!window.Tone)return;
-    await Tone.start();const s=await loadPiano();s.triggerAttackRelease(noteName(keyMidi(i)),.6,Tone.now(),.8);
+    await Tone.start();const s=await loadInst(pinst());s.triggerAttackRelease(noteName(keyMidi(i)),.6,Tone.now(),.8);
   });
   keysEl.appendChild(b);
 }
@@ -335,12 +348,14 @@ async function convert(){
     const ks=[...m.keys()].sort((a,b)=>b-a).slice(0,poly);
     o.kept=new Set(ks);cellKeys.set(o.c,new Set(ks));
   }
+  const nxt=new Map();
+  for(let i=on.length-1;i>=0;i--){const o=on[i];for(const p of o.list)p.nextC=nxt.has(p.key)?nxt.get(p.key):Infinity;for(const p of o.list)nxt.set(p.key,o.c)}
   let repeats=0;
   if(sus>0){
     const k=Math.max(1,Math.round(sus/Lg));
     for(const o of on)for(const p of o.list){
       if(!o.kept.has(p.key)||p.dur<=2*sus)continue;
-      const end=o.c+Math.round(p.dur/Lg);
+      const end=Math.min(o.c+Math.round(p.dur/Lg),p.nextC);
       for(let c=o.c+k;c<end;c+=k){
         const st=cellKeys.get(c)||new Set();
         if(st.has(p.key)||st.size>=poly)continue;
@@ -442,19 +457,61 @@ function showTracks(){
     $('#tracks').appendChild(l);
   });
 }
-async function load(f){
+/* ---------- Nhận dạng guitar: TensorFlow.js 3.21.0 + Basic Pitch 1.0.1 ---------- */
+const TFURL='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
+const BPMODEL='https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json';
+let gp='';
+const loadScript=u=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=u;e.onload=res;e.onerror=()=>rej(new Error('Không tải được '+u));document.head.appendChild(e)});
+async function ensureBP(){
+  if(window.BP)return;
+  if(!window.tf||!window.tf.version||!/^3\./.test(window.tf.version.tfjs||''))await loadScript(TFURL);
+  const e=document.createElement('script');e.text=$('#bpsrc').textContent;document.head.appendChild(e);
+  if(!window.BP)throw new Error('Không khởi tạo được bộ nhận dạng guitar.');
+}
+/* gộp nốt cùng cao độ bị cắt khúc, bỏ họa âm (quãng 8/12/19...) và nốt ngoài tầm đàn guitar */
+function guitarNotes(raw){
+  const a=raw.filter(n=>n.pitchMidi>=40&&n.pitchMidi<=84).sort((x,y)=>x.startTimeSeconds-y.startTimeSeconds);
+  const out=[],last={};
+  for(const n of a){
+    const s=n.startTimeSeconds,e=s+n.durationSeconds,l=last[n.pitchMidi];
+    if(l&&s<=l.end+.06){l.end=Math.max(l.end,e);continue}
+    const o={s,end:e,p:n.pitchMidi};out.push(o);last[n.pitchMidi]=o;
+  }
+  const H=[12,19,24,28,31,36];
+  return out.filter(n=>!out.some(m=>m!==n&&Math.abs(m.s-n.s)<.08&&H.includes(n.p-m.p)&&m.end-m.s>=n.end-n.s));
+}
+async function transcribeGuitar(buf){
+  log('Tải thư viện nhận dạng guitar (TensorFlow.js + Basic Pitch)…');
+  await ensureBP();
+  log('Giải mã và đổi âm thanh về 22050 Hz mono…');
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();
+  let ab;
+  try{ab=await new Promise((res,rej)=>ac.decodeAudioData(buf.slice(0),res,rej))}finally{try{ac.close()}catch(e){}}
+  const off=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),src=off.createBufferSource();
+  src.buffer=ab;src.connect(off.destination);src.start();
+  const data=(await off.startRendering()).getChannelData(0);
+  log('Nhận dạng nốt guitar ('+ab.duration.toFixed(1)+' giây). Bước này có thể mất vài phút…');
+  const bp=new BP.BasicPitch(BPMODEL),fr=[],on=[];
+  await bp.evaluateModel(data,(f,o)=>{fr.push(...f);on.push(...o)},p=>{gp=Math.round(p*100)+'%'});
+  gp='';
+  const g=guitarNotes(BP.noteFramesToTime(BP.outputToNotesPoly(fr,on,.3,.3,9,true,1100,80,true,11)));
+  return{notes:g.map(n=>({pitch:n.p,startTime:n.s,endTime:n.end,velocity:80})),totalTime:Math.max(0,...g.map(n=>n.end)),ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
+}
+
+async function load(f,inst){
   if(!f)return;stop();song=null;midiBytes=null;render();
+  inst=inst||$('#srcinst').value;$('#srcinst').value=inst;document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
   T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
   [0,1,2].forEach(i=>step(i,'idle','Chờ…'));
   fileName=f.name.replace(/\.[^.]+$/,'');
   log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
-  const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('span').textContent='… Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'},500);
+  const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('span').textContent='… Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'+(gp?' · '+gp:'')},500);
   try{
     let buf=await f.arrayBuffer();const h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
     if(h==='MThd'){
       step(0,'ok','Bỏ qua: file đã là MIDI');log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
       parseMidi(buf);midiBytes=buf;$('#bMid').hidden=false;$('#tol').value=0;$('#name').value=fileName;
-      await dbPut('midi',{blob:new Blob([buf],{type:'audio/midi'}),name:fileName});
+      await dbPut('midi',{blob:new Blob([buf],{type:'audio/midi'}),name:fileName,inst});
       log('Đọc được '+tracks.length+' track, '+tracks.reduce((a,t)=>a+t.notes.length,0)+' nốt');
       showTracks();await convert();
     }else if(/\.(txt|json|skysheet)$/i.test(f.name)||f.type==='text/plain'||f.type==='application/json'){
@@ -462,21 +519,26 @@ async function load(f){
     }else{
       step(0,'run','Đang chuẩn bị…');
       if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
-      if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-      log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
-      const ns=await model.transcribeFromAudioFile(f);
-      if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
+      try{await dbDel('midi')}catch(e){} /* tải bài mới thì xóa bài cũ */
+      const isG=inst==='guitar';let ns;
+      if(isG)ns=await transcribeGuitar(buf);
+      else{
+        if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
+        log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
+        ns=await model.transcribeFromAudioFile(f);
+      }
+      if(!ns.notes.length)throw new Error('Không phát hiện nốt '+(isG?'guitar':'piano')+' nào trong file.');
       buf=null; /* bỏ dữ liệu âm thanh gốc, chỉ giữ nốt piano */
       midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       /* Dọn dẹp: lưu MIDI rồi xóa MP3 đã lưu trước đó */
       try{
-        await dbPut('midi',{blob:new Blob([midiBytes],{type:'audio/midi'}),name:fileName});
+        await dbPut('midi',{blob:new Blob([midiBytes],{type:'audio/midi'}),name:fileName,inst});
         await dbDel('pending');
-        log('Chỉ giữ nốt piano (MIDI); đã bỏ nhạc gốc của video và xóa MP3 đã lưu','ok');
+        log('Chỉ giữ nốt '+(isG?'guitar':'piano')+' (MIDI); đã bỏ nhạc gốc của video và xóa MP3 đã lưu','ok');
       }catch(e){log('Không dọn được dữ liệu lưu tạm: '+(e.message||e),'wr')}
-      tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
+      tracks=[{name:(isG?'Guitar':'Piano')+' nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
       tempos=[{tick:0,us:1000000}];division=1000;
       $('#tol').value=35;$('#name').value=fileName;
       log('Tự điền sai số 35 ms vì thời gian nốt nhận dạng từ âm thanh không tròn nhịp');
@@ -501,20 +563,21 @@ function loadSky(buf){
   log('Đã mở bản nhạc Sky: '+j.songNotes.length+' nốt, BPM '+j.bpm,'ok');
   render();
 }
+document.querySelectorAll('.pinst').forEach(sl=>sl.addEventListener('change',()=>{document.querySelectorAll('.pinst').forEach(o=>o.value=sl.value);if(window.Tone)loadInst(sl.value)}));
 ['#name','#author','#by'].forEach(s=>$(s).addEventListener('input',()=>{if(!song)return;song.name=$('#name').value;song.author=$('#author').value;song.transcribedBy=$('#by').value;$('#json').value=toJSON()}));
 ['#tr','#poly','#bpmfix','#tol','#maxbpm','#sus','#speed','#oct','#acc','#dec'].forEach(s=>$(s).addEventListener('change',()=>{if(tracks.length){log('Đổi tuỳ chọn, quy đổi lại…');convert()}}));
 $('#tracks').addEventListener('change',()=>convert());
 log('Sẵn sàng. Chọn một file để bắt đầu.');
-if(window.Tone)loadPiano();else log('Không tải được Tone.js (cần internet).','err');
+if(window.Tone)loadInst(pinst());else log('Không tải được Tone.js (cần internet).','err');
 
 /* ---------- Tự nạp khi vào trang ----------
    Ưu tiên MP3 mới từ index.html; nếu không có thì mở lại MIDI đang giữ (không cần nhận dạng lại). */
 (async()=>{
   try{
     const p=await dbGet('pending');
-    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}))}
+    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}),p.inst)}
     const m=await dbGet('midi');
-    if(m&&m.blob){log('Mở lại MIDI đang giữ: '+m.name);load(new File([m.blob],m.name+'.mid',{type:'audio/midi'}))}
+    if(m&&m.blob){log('Mở lại MIDI đang giữ: '+m.name);load(new File([m.blob],m.name+'.mid',{type:'audio/midi'}),m.inst)}
   }catch(e){log('Không đọc được dữ liệu lưu tạm: '+(e.message||e),'err')}
 })();
 </script>
