@@ -3,437 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MP3 → Sky Studio (Bản Tối Giản)</title>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1"></script>
+<title>Tải MP3 TikTok</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
-/* GIAO DIỆN PHẲNG - TỐI ƯU CHỐNG LAG TỐI ĐA */
-:root {
-  --bg-main: #121212;
-  --bg-card: #1e1e1e;
-  --border: #333333;
-  --text-main: #e0e0e0;
-  --text-muted: #9e9e9e;
-  --c-primary: #8b5cf6;
-  --c-accent: #06b6d4;
-  --st-run: #a78bfa;
-  --st-ok: #10b981;
-  --st-err: #f43f5e;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0; color: var(--text-main);
-  font: 14px/1.5 "Be Vietnam Pro", sans-serif;
-  min-height: 100vh; background-color: var(--bg-main);
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #111; }
-::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
-
-main { max-width: 1060px; margin: 0 auto; padding: 30px 20px; }
-h1 { font-size: 28px; text-align: center; margin: 0 0 10px; color: #fff; }
-.sub { color: var(--text-muted); text-align: center; margin: 0 auto 30px; }
-h2 { font-size: 16px; margin: 0 0 16px; border-left: 4px solid var(--c-primary); padding-left: 8px; }
-
-.card {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 8px; padding: 16px; margin-bottom: 20px;
-}
-#drop {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  border: 2px dashed #555; border-radius: 8px; padding: 30px 10px;
-  text-align: center; cursor: pointer; background: #1a1a1a; margin-bottom: 24px;
-}
-#drop:hover, #drop.on { border-color: var(--c-accent); background: #222; }
-#drop b { font-size: 16px; margin-bottom: 4px; }
-#drop span { color: var(--text-muted); font-size: 13px; }
-
-.flow { display: grid; grid-template-columns: minmax(0,4fr) minmax(0,6fr); gap: 16px; }
-@media(max-width:820px) { .flow { grid-template-columns: 1fr; } }
-
-#steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-#steps li {
-  display: flex; gap: 12px; align-items: center; padding: 12px;
-  border: 1px solid var(--border); border-radius: 6px; background: #161616;
-}
-#steps .dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: none; }
-#steps li[data-st=run] { border-color: var(--st-run); } #steps li[data-st=run] .dot { background: var(--st-run); }
-#steps li[data-st=ok] { border-color: var(--st-ok); } #steps li[data-st=ok] .dot { background: var(--st-ok); }
-#steps li[data-st=err] { border-color: var(--st-err); } #steps li[data-st=err] .dot { background: var(--st-err); }
-
-#log {
-  height: 250px; overflow: auto; background: #000;
-  border: 1px solid var(--border); border-radius: 6px; padding: 12px;
-  font-family: monospace; font-size: 12px;
-}
-#log div { margin-bottom: 4px; }
-#log time { color: #666; margin-right: 8px; }
-#log .ok span { color: var(--st-ok); } #log .err span { color: var(--st-err); }
-
-.grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin-top: 10px; }
-label { display: flex; flex-direction: column; font-size: 13px; color: var(--text-muted); }
-input[type=text], input[type=number], select, textarea {
-  width: 100%; margin-top: 4px; background: #111; color: #fff;
-  border: 1px solid #444; border-radius: 4px; padding: 8px; font: inherit;
-}
-input[type=checkbox] { accent-color: var(--c-accent); }
-label:has(input[type=checkbox]) { flex-direction: row; align-items: center; gap: 8px; color: #fff; cursor: pointer; }
-
-.btn {
-  background: var(--c-primary); color: #fff; border: 0; border-radius: 6px;
-  padding: 10px 16px; font-weight: 600; cursor: pointer; display: inline-flex; gap: 6px;
-}
-.btn:hover { background: #7c3aed; }
-.btn.sec { background: #333; color: #fff; } .btn.sec:hover { background: #444; }
-.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
-
-summary { cursor: pointer; color: var(--c-accent); font-weight: 600; margin-bottom: 8px; }
-
-/* Bàn phím không đổ bóng */
-#keys {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
-  max-width: 350px; margin: 20px auto; padding: 12px;
-  background: #111; border-radius: 8px; border: 1px solid #333;
-}
-.key {
-  aspect-ratio: 1; background: #2a3f5f; border-radius: 6px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-.key svg { width: 80%; height: 80%; fill: none; stroke: #fff; stroke-width: 2px; }
-.key.hit { background: #facc15; }
-.key.hit svg { stroke: #000; }
-
-#stats { color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 16px; }
-#rollbox { margin-top: 16px; border: 1px solid var(--border); border-radius: 6px; background: #000; overflow-x: auto; }
-#roll { display: block; }
-#rep { font-size: 13px; margin-top: 16px; color: #aaa; background: #111; padding: 12px; border: 1px solid #333; }
-textarea { height: 100px; font-family: monospace; font-size: 12px; }
-[hidden] { display: none !important; }
+:root{--text-muted:#94a3b8;--c-primary:#8b5cf6;--c-secondary:#ec4899;--c-accent:#06b6d4;--ok:#10b981;--err:#f43f5e}
+*{box-sizing:border-box}
+body{margin:0;color:#f8fafc;font:14.5px/1.6 "Be Vietnam Pro",system-ui,sans-serif;min-height:100vh;background-color:#090a0f;background-image:radial-gradient(circle at 15% 30%,rgba(139,92,246,.15),transparent 40%),radial-gradient(circle at 85% 70%,rgba(236,72,153,.12),transparent 40%);background-attachment:fixed}
+main{max-width:640px;margin:0 auto;padding:60px 20px}
+h1{font-size:clamp(28px,6vw,44px);line-height:1.15;font-weight:800;margin:0 0 12px;text-align:center}
+.sub{color:var(--text-muted);text-align:center;margin:0 0 30px}
+.card{background:rgba(17,19,31,.65);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:24px}
+input{width:100%;background:rgba(0,0,0,.3);color:#f8fafc;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;font:inherit}
+input:focus-visible{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 4px rgba(6,182,212,.2)}
+.row{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+.btn{flex:1;background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer}
+.btn.sec{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.btn:disabled{opacity:.6;cursor:wait}
+#msg{margin-top:16px;color:var(--text-muted);min-height:1.6em;overflow-wrap:anywhere}
+#msg.ok{color:var(--ok)}#msg.err{color:var(--err)}
+#msg a{color:var(--c-accent)}
 </style>
 </head>
 <body>
 <main>
-<h1>MP3 → Sky Studio</h1>
-<p class="sub">Bản Giao Diện Tối Giản Chống Lag</p>
-
-<label id="drop" tabindex="0" for="file">
-  <b>Bấm để chọn file hoặc kéo thả vào đây</b>
-  <span>MP3, WAV, MIDI, Txt/Json Sky</span>
-</label>
-<input id="file" type="file" hidden accept=".mp3,.wav,.flac,.m4a,.ogg,.mid,.midi,.txt,.json,.skysheet,audio/*">
-
-<div class="flow">
-  <div>
-    <ol id="steps">
-      <li id="s0" data-st="idle"><i class="dot"></i><div><b>Nhận dạng nốt</b><br><small>Chờ file</small></div></li>
-      <li id="s1" data-st="idle"><i class="dot"></i><div><b>Quy đổi phím</b><br><small>Chờ file</small></div></li>
-      <li id="s2" data-st="idle"><i class="dot"></i><div><b>Sẵn sàng</b><br><small>Chờ file</small></div></li>
-    </ol>
-    <div class="row"><button class="btn sec" id="bMid" hidden>Tải MIDI</button></div>
-  </div>
-  <div class="card" style="margin:0"><h2>Nhật ký</h2><div id="log"></div></div>
-</div>
-
-<div class="card" id="opts" hidden style="margin-top:16px">
-  <details open><summary>Tùy chỉnh AI</summary>
-  <div class="grid">
-    <label>Tên bài hát<input id="name" type="text"></label>
-    <label>BPM cố định<input id="bpmfix" type="number"></label>
-    <label>Sai số (ms)<input id="tol" type="number" value="0"></label>
-    <label>Dịch tông
-      <select id="tr"><option value="auto">Tự động</option></select></label>
-    <label>Polyphony
-      <select id="poly"><option>1</option><option>2</option><option>4</option><option selected>10</option></select></label>
-    <label>Dịch quãng 8
-      <select id="oct"><option value="auto">Tự động</option><option>-1</option><option>0</option><option>1</option></select></label>
-    <label>Thăng/giáng
-      <select id="acc"><option value="follow">Giai điệu</option><option value="down">Hạ</option><option value="up">Nâng</option></select></label>
-    <label>Tốc độ (%)<input id="speed" type="number" value="100"></label>
-    <label style="align-self:end"><input type="checkbox" id="dec"> BPM lẻ</label>
-    <label>Nốt kéo dài <select id="sus"><option value="0">Tắt</option><option value="150">150ms</option><option value="250">250ms</option></select></label>
-  </div>
-  <div class="row" id="tracks" style="margin-top:16px; border-top:1px solid #333; padding-top:10px"></div>
-  </details>
-</div>
-
-<div class="card" id="play" hidden>
-  <h2>Nghe thử Bản nhạc</h2>
-  <div id="keys"></div>
-  <div class="row" style="justify-content:center">
-    <button class="btn" id="bPlay">Phát nhạc</button>
-    <button class="btn sec" id="bStop">Dừng</button>
-  </div>
-  <div id="stats"></div>
-  <div id="rollbox"><canvas id="roll"></canvas></div>
-  <div id="rep"></div>
-</div>
-
-<div class="card" id="out" hidden>
-  <h2>Xuất File</h2>
+<h1>Tải MP3 từ link TikTok</h1>
+<p class="sub">Dán link video, tải xong trang tự chuyển sang Sky Studio để xử lý.</p>
+<form class="card" id="f" autocomplete="off">
+  <input id="url" type="url" inputmode="url" required placeholder="https://www.tiktok.com/@user/video/…">
   <div class="row">
-    <button class="btn" id="bTxt">Tải .txt</button>
-    <button class="btn sec" id="bJson">Tải .json</button>
-    <button class="btn sec" id="bCopy">Copy Code JSON</button>
+    <button type="button" class="btn sec" id="paste">Dán link</button>
+    <button type="submit" class="btn" id="go">Tải MP3</button>
   </div>
-  <details style="margin-top:16px"><summary>Xem JSON</summary><textarea id="json" readonly></textarea></details>
-</div>
+  <div id="msg" role="status"></div>
+</form>
 </main>
 <script>
-// Toàn bộ logic JS được giữ nguyên bản tuyệt đối từ nguồn để không ảnh hưởng chức năng nghe thử
 const $=s=>document.querySelector(s);
-const SC=[0,2,4,5,7,9,11],NAMES=['C','D','E','F','G','A','B'];
-const keyMidi=i=>60+12*Math.floor(i/7)+SC[i%7];
-const CKPT='https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
-let tracks=[],tempos=[],division=480,song=null,fileName='bai-nhac',ctx=null,timers=[],model=null,midiBytes=null,T0=performance.now(),busy=0;
+const API='https://www.tikwm.com/api/';
+const absUrl=u=>!u?'':u.startsWith('//')?'https:'+u:u.startsWith('/')?'https://www.tikwm.com'+u:u;
+const say=(t,c='',html)=>{const m=$('#msg');m.className=c;html?m.innerHTML=t:m.textContent=t};
 
-function log(msg,cls=''){
-  const L=$('#log'),s=(performance.now()-T0)/1000,d=document.createElement('div');
-  d.className=cls;
-  d.innerHTML='<time>'+String(Math.floor(s/60)).padStart(2,'0')+':'+(s%60).toFixed(1).padStart(4,'0')+'</time><span></span>';
-  d.lastChild.textContent=msg;L.appendChild(d);L.scrollTop=L.scrollHeight;
-}
-function step(i,st,txt){const e=$('#s'+i);e.dataset.st=st;if(txt!=null)e.querySelector('small').textContent=txt}
-const frame=()=>new Promise(r=>setTimeout(r,30));
+$('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){say('Trình duyệt không cho đọc clipboard, hãy dán thủ công.','err')}};
 
-const keysEl=$('#keys');
-const SH=['c','d','o','d','o','o','d','c','d','o','o','d','o','d','c'];
-const SVGS={o:'<circle cx="50" cy="50" r="25"/>',d:'<path d="M50 20L80 50L50 80L20 50Z"/>',c:'<path d="M50 12L88 50L50 88L12 50Z"/><circle cx="50" cy="50" r="27"/>'};
-for(let i=0;i<15;i++){
-  const b=document.createElement('div');b.className='key';b.id='k'+i;
-  b.innerHTML='<svg viewBox="0 0 100 100">'+SVGS[SH[i]]+'</svg>';
-  b.addEventListener('pointerdown',()=>{tone(i,0);flash(i,160)});
-  keysEl.appendChild(b);
-}
-function flash(i,ms){const e=$('#k'+i);e.classList.add('hit');setTimeout(()=>e.classList.remove('hit'),ms)}
-
-let master=null,sched=null;
-function out(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(!master){master=ctx.createGain();master.connect(ctx.destination)}return master}
-function tone(i,delay){
-  const dst=out(),f=440*Math.pow(2,(keyMidi(i)-69)/12),t=ctx.currentTime+delay;
-  [['triangle',1,.3],['sine',2,.08]].forEach(([ty,mul,vol])=>{
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.type=ty;o.frequency.value=f*mul;
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.008);g.gain.exponentialRampToValueAtTime(.001,t+.9);
-    o.connect(g).connect(dst);o.start(t);o.stop(t+1);
-  });
-}
-function stop(){
-  timers.forEach(clearTimeout);timers=[];clearInterval(sched);sched=null;
-  if(master){try{master.gain.cancelScheduledValues(0);master.gain.value=0;master.disconnect()}catch(e){}master=null}
-}
-$('#bStop').onclick=()=>{stop();log('Đã dừng phát')};
-$('#bPlay').onclick=()=>{
-  if(!song)return;stop();out();ctx.resume();
-  const Lg=60000/(song.bpm||120);
-  const ev=song.songNotes.map(n=>({i:+n.key.replace(/^\dKey/,''),t:Math.floor(n.time/Lg)*Lg})).sort((a,b)=>a.t-b.t);
-  if(!ev.length)return;
-  const t0=ev[0].t,st=ctx.currentTime+.15;let k=0;
-  const pump=()=>{
-    const now=ctx.currentTime;
-    while(k<ev.length&&st+(ev[k].t-t0)/1000<now+2){
-      const e=ev[k++],d=Math.max(0,st+(e.t-t0)/1000-now);
-      tone(e.i,d);timers.push(setTimeout(()=>flash(e.i,140),d*1000));
-    }
-    if(k>=ev.length){clearInterval(sched);sched=null}
-  };
-  pump();if(k<ev.length)sched=setInterval(pump,250);
-};
-
-function parseMidi(buf){
-  const d=new DataView(buf);let p=0;
-  const str=n=>{let s='';for(let i=0;i<n;i++)s+=String.fromCharCode(d.getUint8(p++));return s};
-  if(str(4)!=='MThd')throw new Error('Không phải MIDI');
-  p+=4;p+=2;const nt=d.getUint16(p);p+=2;division=d.getUint16(p);p+=2;
-  tracks=[];tempos=[];
-  for(let t=0;t<nt&&p<d.byteLength;t++){
-    const id=str(4),len=d.getUint32(p);p+=4;const end=p+len;
-    if(id!=='MTrk'){p=end;continue}
-    let tick=0,rs=0,name='',notes=[],act={};
-    const vl=()=>{let v=0,b;do{b=d.getUint8(p++);v=(v<<7)|(b&127)}while(b&128);return v};
-    while(p<end){
-      tick+=vl();let s=d.getUint8(p);
-      if(s===0xFF){
-        p++;const ty=d.getUint8(p++),l=vl();
-        if(ty===0x51)tempos.push({tick,us:(d.getUint8(p)<<16)|(d.getUint8(p+1)<<8)|d.getUint8(p+2)});
-        if(ty===0x03){name='';for(let i=0;i<l;i++)name+=String.fromCharCode(d.getUint8(p+i))}
-        p+=l;
-      }else if(s===0xF0||s===0xF7){p++;p+=vl()}
-      else{
-        if(s&128){rs=s;p++}else s=rs;
-        const hi=s>>4,ch=s&15;
-        if(hi===9||hi===8){const n=d.getUint8(p++),v=d.getUint8(p++),k=ch*128+n;
-          if(ch!==9){const a=act[k];
-            if(hi===9&&v>0){if(a)a.end=tick;const o={tick,n,end:null};notes.push(o);act[k]=o}
-            else if(a){a.end=tick;delete act[k]}}}
-        else if(hi===0xC||hi===0xD)p+=1;else p+=2;
-      }
-    }
-    p=end; if(notes.length)tracks.push({name:name||('Track '+(tracks.length+1)),notes});
-  }
-  tempos.sort((a,b)=>a.tick-b.tick);
-}
-function t2ms(tick){
-  let ms=0,lt=0,us=500000;
-  for(const t of tempos){if(t.tick>=tick)break;ms+=(t.tick-lt)*us/1000/division;lt=t.tick;us=t.us}
-  return ms+(tick-lt)*us/1000/division;
-}
-const foldOct=m=>{let k=0;while(m<60){m+=12;k++}while(m>84){m-=12;k++}return{m,k}};
-const keyIdx=m=>Math.floor((m-60)/12)*7+SC.indexOf(m%12);
-function mapPitch(m0,prev,mode){
-  const f=foldOct(m0),m=f.m;
-  if(SC.includes(m%12))return{i:keyIdx(m),acc:false,k:f.k};
-  const lo=keyIdx(m-1),hi=keyIdx(m+1);let i;
-  if(mode==='up')i=hi;else if(mode==='down')i=lo;
-  else if(prev==null)i=lo;else i=Math.abs(hi-prev)<Math.abs(lo-prev)?hi:lo;
-  return{i,acc:true,k:f.k};
-}
-async function convert(){
-  const run=++busy,all=[];
-  tracks.forEach((t,i)=>{if($('#t'+i).checked)all.push(...t.notes)});
-  if(!all.length){song=null;render();return}
-  step(1,'run','Đang quy đổi…');log('Đang quy đổi nốt'); await frame();if(run!==busy)return;
-  try{
-    const hist=new Array(128).fill(0);all.forEach(n=>hist[n.n]++);
-    const shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
-    let bc=Infinity,sh=0,oc=0;
-    for(const a of shSel==='auto'?rng(-11,11):[+shSel])for(const o of ocSel==='auto'?rng(-3,3):[+ocSel]){
-      const S=a+12*o;let c=0;
-      for(let p=0;p<128;p++)if(hist[p]){const f=foldOct(p+S);c+=hist[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}
-      c+=.01*Math.abs(a)+.0001*Math.abs(o); if(c<bc){bc=c;sh=a;oc=o}
-    }
-    const S=sh+12*oc,mode=$('#acc').value,spd=Math.max(.25,Math.min(3,(+$('#speed').value||100)/100)),poly=Math.max(1,+$('#poly').value||10);
-    const pts=all.map(n=>({tick:n.tick,t:t2ms(n.tick)/spd,dur:n.end!=null?(t2ms(n.end)-t2ms(n.tick))/spd:0,m:n.n+S})).sort((a,b)=>a.tick-b.tick);
-    let prev=null;
-    for(const p of pts){const r=mapPitch(p.m,prev,mode);p.key=r.i;p.acc=r.acc;p.fold=r.k;prev=r.i}
-    const on=[];
-    for(const p of pts){const o=on[on.length-1];if(o&&p.t-o.t<=15)o.list.push(p);else on.push({t:p.t,list:[p]})}
-    await frame();if(run!==busy)return;
-    const manual=+$('#bpmfix').value,dec=$('#dec').checked,sus=+$('#sus').value;
-    const tolMs=Math.max(.01,parseFloat($('#tol').value)||0),maxB=500;
-    const evalB=(bpm,set)=>{
-      const L=60000/bpm;let c=0,s=0;
-      for(const o of set){const a=o.t/L*2*Math.PI;c+=Math.cos(a);s+=Math.sin(a)}
-      let t0=Math.atan2(s,c)/(2*Math.PI)*L,lo=1e9,hi=-1e9;
-      for(const o of set){const x=(o.t-t0)/L,e=(x-Math.round(x))*L;if(e<lo)lo=e;if(e>hi)hi=e}
-      t0+=(lo+hi)/2; let col=0,pr=NaN;
-      for(const o of set){const r=Math.round((o.t-t0)/L);if(r===pr)col++;pr=r}
-      return{bpm,L,t0,mx:(hi-lo)/2,col};
+/* Lưu file vào IndexedDB để app.html (cùng trang web) lấy ra */
+function handoff(blob,name){
+  return new Promise((res,rej)=>{
+    const q=indexedDB.open('sky-handoff',1);
+    q.onupgradeneeded=()=>q.result.createObjectStore('f');
+    q.onerror=()=>rej(q.error);
+    q.onsuccess=()=>{
+      const tx=q.result.transaction('f','readwrite');
+      tx.objectStore('f').put({blob,name},'pending');
+      tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
     };
-    const fmt=b=>dec?Math.round(b*1e6)/1e6:Math.round(b);
-    let g;
-    if(manual>0)g=evalB(manual,on);
-    else{
-      const set=new Set(),us=new Set([tempos.length?tempos[0].us:500000,...tempos.slice(0,40).map(x=>x.us)]);
-      for(const u of us)for(const d of [1,2,3,4,6,8,12,16])set.add(fmt(6e7/u*d));
-      for(let b=30;b<=maxB;b++)set.add(b);
-      const cands=[...set].filter(b=>b>=30&&b<=maxB).sort((a,b)=>a-b).map(b=>evalB(b,on)).filter(c=>c.col===0);
-      g=cands.find(c=>c.mx<=tolMs);
-      if(!g&&cands.length){const m=Math.min(...cands.map(c=>c.mx));g=cands.find(c=>c.mx<=m*1.05+1e-9)}
-      if(!g)g=evalB(maxB,on);
-    }
-    const bpm=g.bpm,Lg=60000/bpm,START=4,cellKeys=new Map();
-    let last=-1e9,c0=null;
-    for(const o of on){
-      let c=Math.round((o.t-g.t0)/Lg);
-      if(c<=last)c=last+1; last=c;if(c0===null)c0=c;o.c=c-c0+START;
-      const m=new Map();for(const p of o.list)m.set(p.key,p);
-      const ks=[...m.keys()].sort((a,b)=>b-a).slice(0,poly);
-      o.kept=new Set(ks);cellKeys.set(o.c,new Set(ks));
-    }
-    if(sus>0){
-      const k=Math.max(1,Math.round(sus/Lg));
-      for(const o of on)for(const p of o.list){
-        if(!o.kept.has(p.key)||p.dur<=2*sus)continue;
-        const end=o.c+Math.round(p.dur/Lg);
-        for(let c=o.c+k;c<end;c+=k){
-          const st=cellKeys.get(c)||new Set();
-          if(!st.has(p.key)&&st.size<poly){st.add(p.key);cellKeys.set(c,st);}
-        }
-      }
-    }
-    const notes=[];
-    for(const c of [...cellKeys.keys()].sort((a,b)=>a-b)){
-      const t=Math.ceil(c*Lg)+1;
-      [...cellKeys.get(c)].sort((a,b)=>a-b).forEach(k=>notes.push({time:t,key:'1Key'+k}));
-    }
-    song={name:$('#name').value,author:'',transcribedBy:'',isComposed:true,bpm,bitsPerPage:16,pitchLevel:0,isEncrypted:false,songNotes:notes};
-    step(1,'ok','Hoàn thành'); step(2,'ok','Sẵn sàng'); log('Quy đổi xong. BPM: '+bpm,'ok');
-    render();
-  }catch(e){step(1,'err','Lỗi');log(e.message||e,'err')}
-}
-function drawRoll(){
-  const cv=$('#roll'),n=song.songNotes;if(!n.length){cv.width=1;return}
-  const Lg=60000/(song.bpm||120),cs=n.map(x=>({c:Math.floor(x.time/Lg),k:+x.key.replace(/^\dKey/,'')}));
-  let c0=Infinity,c1=-Infinity;for(const a of cs){if(a.c<c0)c0=a.c;if(a.c>c1)c1=a.c}
-  const W=6,H=8,cols=Math.min(c1-c0+1,3500); // Thu nhỏ cuộn piano để giảm tải vẽ canvas
-  cv.width=cols*W;cv.height=15*H;
-  const x=cv.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,cv.width,cv.height);
-  x.fillStyle='#06b6d4';
-  for(const a of cs){const c=a.c-c0;if(c<cols)x.fillRect(c*W+1,(14-a.k)*H+1,W-2,H-2)}
-}
-function render(){
-  const has=!!song; $('#play').hidden=$('#out').hidden=!has;
-  if(!has)return;
-  $('#stats').textContent=song.songNotes.length+' nốt';
-  $('#json').value=JSON.stringify([song]); drawRoll();
-}
-function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();}
-const safe=()=>(($('#name').value||fileName).replace(/[\\/:*?"<>|]+/g,'_'));
-$('#bTxt').onclick=()=>{
-  const s=JSON.stringify([song]),u=new Uint16Array(s.length+1);u[0]=0xFEFF;
-  for(let i=0;i<s.length;i++)u[i+1]=s.charCodeAt(i);
-  download(safe()+'.txt',new Blob([u],{type:'text/plain'}));
-};
-$('#bJson').onclick=()=>download(safe()+'.json',new Blob([JSON.stringify([song])],{type:'application/json'}));
-$('#bCopy').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify([song]))}catch(e){}};
-$('#bMid').onclick=()=>download(fileName+'.mid',new Blob([midiBytes],{type:'application/octet-stream'}));
-
-for(let t=-11;t<=11;t++){const o=document.createElement('option');o.value=t;o.textContent=(t>0?'+':'')+t;$('#tr').appendChild(o)}
-const drop=$('#drop'),fi=$('#file');
-drop.onclick=()=>fi.click();
-drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};
-drop.ondragleave=e=>{e.preventDefault();drop.classList.remove('on')};
-drop.ondrop=e=>{e.preventDefault();drop.classList.remove('on');load(e.dataTransfer.files[0])};
-fi.onchange=()=>{load(fi.files[0]);fi.value=''};
-
-function showTracks(){
-  $('#opts').hidden=false; $('#tracks').innerHTML='';
-  tracks.forEach((t,i)=>{
-    const l=document.createElement('label');
-    l.innerHTML='<input type="checkbox" id="t'+i+'" checked> <span>'+t.name.substring(0,20)+' ('+t.notes.length+' nốt)</span>';
-    $('#tracks').appendChild(l);
   });
 }
-async function load(f){
-  if(!f)return;stop();song=null;midiBytes=null;render();
-  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;
-  [0,1,2].forEach(i=>step(i,'idle','...'));
-  fileName=f.name.replace(/\.[^.]+$/,''); log('Đang đọc: '+f.name);
+
+$('#f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const link=$('#url').value.trim(),go=$('#go');
+  if(!/tiktok\.com/i.test(link)){say('Link không hợp lệ: hãy dán link từ tiktok.com hoặc vm.tiktok.com','err');return}
+  go.disabled=true;
   try{
-    const buf=await f.arrayBuffer(),h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
-    if(h==='MThd'){
-      step(0,'ok','MIDI');parseMidi(buf);$('#tol').value=0;$('#name').value=fileName;
-      showTracks();await convert();
-    }else if(/\.(txt|json|skysheet)$/i.test(f.name)||f.type==='text/plain'){
-      let txt=new TextDecoder('utf-8').decode(buf);
-      let j=JSON.parse(txt.replace(/^\uFEFF/,''));if(Array.isArray(j))j=j[0];
-      song=j; $('#opts').hidden=false; $('#name').value=j.name||fileName;
-      step(0,'ok','Đã tải'); step(1,'ok','File Sky'); step(2,'ok','Sẵn sàng'); render();
-    }else{
-      step(0,'run','Đang xử lý AI...');
-      if(!model){const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;}
-      const ns=await model.transcribeFromAudioFile(f);
-      midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
-      step(0,'ok',ns.notes.length+' nốt');
-      tracks=[{name:'Piano',notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
-      tempos=[{tick:0,us:1000000}];division=1000;
-      $('#tol').value=35;$('#name').value=fileName;
-      showTracks();await convert();
-    }
-  }catch(e){step(0,'err','Lỗi');log(e.message||e,'err')}
-}
-['#tr','#poly','#bpmfix','#tol','#sus','#speed','#oct','#acc','#dec'].forEach(s=>$(s).addEventListener('change',()=>tracks.length&&convert()));
-$('#tracks').addEventListener('change',()=>convert());
+    say('Đang lấy thông tin video…');
+    const res=await fetch(API+'?url='+encodeURIComponent(link));
+    if(!res.ok)throw new Error('API trả về lỗi '+res.status);
+    const j=await res.json();
+    if(j.code!==0||!j.data)throw new Error(j.msg||'Không lấy được dữ liệu video');
+    const d=j.data,inf=d.music_info||{},mp3=absUrl(d.music||inf.play);
+    if(!mp3)throw new Error('Video này không có file nhạc để tải.');
+    const title=(inf.title||d.title||'tiktok-audio').replace(/[\\/:*?"<>|#\n\r]+/g,' ').replace(/\s+/g,' ').trim().slice(0,80)||'tiktok-audio';
+    say('Đang tải MP3…');
+    let blob;
+    try{const r=await fetch(mp3);if(!r.ok)throw 0;blob=await r.blob()}
+    catch(_){say('Nguồn MP3 không cho tải trực tiếp. <a href="'+mp3+'" target="_blank" rel="noopener">Mở MP3</a> để lưu thủ công, rồi vào <a href="app.html">Sky Studio</a> thả file vào.','err',true);return}
+    await handoff(blob,title+'.mp3');
+    say('Tải xong ('+(blob.size/1048576).toFixed(2)+' MB), đang chuyển sang Sky Studio…','ok');
+    location.href='app.html';
+  }catch(err){
+    let m=String(err.message||err);
+    if(/limit/i.test(m))m='Dịch vụ đang giới hạn số lượt gọi, đợi vài giây rồi thử lại.';
+    else if(/Failed to fetch|NetworkError/i.test(m))m='Không kết nối được tới máy chủ lấy dữ liệu, hãy kiểm tra mạng.';
+    say('Lỗi: '+m,'err');
+  }finally{go.disabled=false}
+});
 </script>
 </body>
 </html>
