@@ -1,8 +1,0 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-numpy<2
-torch
-librosa==0.10.2.post1
-piano_transcription_inference
-fastapi
-uvicorn
-python-multipart
