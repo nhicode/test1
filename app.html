@@ -6,21 +6,31 @@
 <title>MP3 → Sky Studio</title>
 <script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1"></script>
 <style>
-body{font:15px/1.5 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:16px;color:#111;background:#fff}
+:root{color-scheme:dark}
+body{font:15px/1.5 system-ui,sans-serif;max-width:760px;margin:0 auto;padding:16px;color:#e5e7eb;background:#0b0c10}
 h1{font-size:24px;margin:0 0 8px}h2{font-size:17px;margin:0 0 8px}
-section{border:1px solid #ccc;padding:12px;margin:12px 0}
-label{display:block;margin:6px 0;font-size:13px}
-input[type=text],input[type=number],select,textarea{display:block;width:100%;padding:6px;font:inherit;box-sizing:border-box}
+section{border:1px solid #2a2d38;background:#12141b;padding:12px;margin:12px 0}
+label{display:block;margin:6px 0;font-size:13px;color:#9ca3af}
+input[type=text],input[type=number],select,textarea{display:block;width:100%;padding:6px;font:inherit;box-sizing:border-box;background:#000;color:#e5e7eb;border:1px solid #2a2d38}
+input[type=file]{color:#9ca3af}
 input[type=checkbox]{margin-right:6px}
-button{padding:8px 14px;font:inherit;cursor:pointer}
+summary{cursor:pointer}
+button{padding:8px 14px;font:inherit;cursor:pointer;background:#1e222d;color:#e5e7eb;border:1px solid #333847;border-radius:6px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
-#log{height:200px;overflow:auto;border:1px solid #ccc;padding:8px;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace}
-#log time{color:#777;margin-right:8px}#log .ok{color:#080}#log .err{color:#b00}#log .wr{color:#a60}
-#keys{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-width:360px;margin:12px 0}
-.key{padding:14px 0;font-size:22px}.key.hit{background:#fd8}
-#rollbox{overflow-x:auto;border:1px solid #ccc;margin-top:12px}#roll{display:block}
+#log{height:200px;overflow:auto;background:#050608;border:1px solid #2a2d38;padding:8px;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;margin-top:10px}
+#log time{color:#64748b;margin-right:8px}#log .ok{color:#34d399}#log .err{color:#f87171}#log .wr{color:#fbbf24}
+#keys{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:420px;margin:20px auto 24px;padding:16px;background:#162235;border-radius:18px}
+.key{aspect-ratio:1;background:#223a5c;border:0;border-radius:14px;padding:0;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center}
+.key svg{width:100%;height:100%;fill:none;stroke:#fff;stroke-width:1.6px;stroke-linejoin:miter;pointer-events:none}
+.key svg *{vector-effect:non-scaling-stroke}
+.key:hover{background:#2c4a73}
+.key.hit{transform:scale(.92);background:#fdf0cc;box-shadow:0 0 22px rgba(253,240,204,.55)}
+.key.hit svg{stroke:#1b3052}
+.ctr{text-align:center}
+#rollbox{overflow-x:auto;border:1px solid #2a2d38;margin-top:12px;background:#050608}#roll{display:block}
+#rep{margin-top:12px;color:#9ca3af}#rep b{color:#06b6d4}
 textarea{height:120px;font:12px ui-monospace,monospace}
-#drop.on{background:#eef}
+#drop.on{border-color:#06b6d4}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -73,8 +83,8 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 <section id="play" hidden>
   <h2>Nghe thử</h2>
   <div id="keys"></div>
-  <button id="bPlay">Phát</button> <button id="bStop">Dừng</button>
-  <p id="stats"></p>
+  <div class="ctr"><button id="bPlay">▶ Phát nhạc</button> <button id="bStop">■ Dừng</button>
+  <p id="stats"></p></div>
   <div id="rollbox"><canvas id="roll"></canvas></div>
   <div id="rep"></div>
 </section>
@@ -113,9 +123,12 @@ function step(i,st,txt){const e=$('#s'+i);e.dataset.st=st;if(txt!=null)e.querySe
 const frame=()=>new Promise(r=>setTimeout(r,30));
 
 /* ---------- Bàn phím 15 nút + nghe thử ---------- */
-const keysEl=$('#keys'),SH=[...'◈◇○◇○○◇◈◇○○◇○◇◈'];
+const keysEl=$('#keys');
+const SH=['c','d','o','d','o','o','d','c','d','o','o','d','o','d','c'];
+const SVGS={o:'<circle cx="50" cy="50" r="25"/>',d:'<path d="M50 20L80 50L50 80L20 50Z"/>',c:'<path d="M50 12L88 50L50 88L12 50Z"/><circle cx="50" cy="50" r="27"/>'};
 for(let i=0;i<15;i++){
-  const b=document.createElement('button');b.className='key';b.id='k'+i;b.textContent=SH[i];b.setAttribute('aria-label','Phím '+i);
+  const b=document.createElement('button');b.type='button';b.className='key';b.id='k'+i;b.setAttribute('aria-label','Phím '+i);
+  b.innerHTML='<svg viewBox="0 0 100 100" aria-hidden="true">'+SVGS[SH[i]]+'</svg>';
   b.addEventListener('pointerdown',()=>{tone(i,0);flash(i,160)});
   keysEl.appendChild(b);
 }
@@ -332,9 +345,9 @@ function drawRoll(){
   let c0=Infinity,c1=-Infinity;for(const a of cs){if(a.c<c0)c0=a.c;if(a.c>c1)c1=a.c}
   const W=8,H=10,cols=Math.min(c1-c0+1,3500);
   cv.width=cols*W;cv.height=15*H;
-  const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
-  x.fillStyle='#ddd';for(let c=0;c<cols;c+=4)x.fillRect(c*W,0,1,cv.height);
-  x.fillStyle='#000';
+  const x=cv.getContext('2d');x.fillStyle='#050608';x.fillRect(0,0,cv.width,cv.height);
+  x.fillStyle='#1e293b';for(let c=0;c<cols;c+=4)x.fillRect(c*W,0,1,cv.height);
+  x.fillStyle='#06b6d4';
   for(const a of cs){const c=a.c-c0;if(c<cols)x.fillRect(c*W+1,(14-a.k)*H+1,W-2,H-2)}
 }
 function render(){
