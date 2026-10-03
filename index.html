@@ -90,6 +90,12 @@ textarea{height:130px;font-family:monospace;font-size:12px}
   <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted)">Chỉ dùng nội dung bạn có quyền sử dụng. Nhạc và video trên TikTok thuộc bản quyền của tác giả và chủ sở hữu.</p>
 </form>
 
+<div class="card" style="padding:18px">
+  <label for="srv">Máy chủ nhận dạng (địa chỉ Hugging Face Space của bạn, để trống = chạy ngay trên trình duyệt)</label>
+  <input id="srv" type="url" inputmode="url" placeholder="https://ten-ban-sky-transcribe.hf.space">
+  <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted)">Có máy chủ thì cả file được nhận dạng một lượt, không chia đoạn, không tốn RAM điện thoại.</p>
+</div>
+
 <div class="flow">
   <div>
     <ol id="steps">
@@ -457,10 +463,36 @@ function resetRun(){
 }
 $('#bOpen').onclick=()=>mp3Url&&window.open(mp3Url,'_blank','noopener');
 
+/* ---------- Máy chủ nhận dạng: gửi nguyên file, nhận dạng một lượt ---------- */
+const SERVER_URL='';   /* hoặc điền cứng địa chỉ máy chủ vào đây */
+function serverUrl(){return (SERVER_URL||$('#srv').value||'').trim().replace(/\/+$/,'')}
+$('#srv').value=localStorage.getItem('skySrv')||'';
+$('#srv').addEventListener('change',()=>{localStorage.setItem('skySrv',$('#srv').value.trim());log($('#srv').value.trim()?'Đã lưu địa chỉ máy chủ':'Đã xoá máy chủ, sẽ chạy trên trình duyệt')});
+async function transcribeServer(f,srv){
+  log('Gửi nguyên file lên máy chủ để nhận dạng một lượt (lần đầu máy chủ có thể cần ~1 phút để thức dậy)…');
+  const fd=new FormData();fd.append('file',f,f.name);
+  let r=await fetch(srv+'/transcribe',{method:'POST',body:fd});
+  if(!r.ok)throw new Error('Máy chủ trả lỗi '+r.status);
+  const job=(await r.json()).job;log('Máy chủ đã nhận file, đang xử lý…');
+  for(;;){
+    await new Promise(x=>setTimeout(x,2000));
+    r=await fetch(srv+'/job/'+job);
+    if(!r.ok)throw new Error('Máy chủ trả lỗi '+r.status);
+    const j=await r.json();
+    window.PROG=' · máy chủ '+(j.status==='queued'?'đang xếp hàng':'đang nhận dạng')+' ('+j.elapsed+' s)';
+    if(j.status==='error')throw new Error(j.error||'Máy chủ báo lỗi');
+    if(j.status==='done'){
+      window.PROG='';const R=j.result;
+      R.midi=Uint8Array.from(atob(R.midi),c=>c.charCodeAt(0));
+      log('Máy chủ nhận dạng xong cả bài','ok');return R;
+    }
+  }
+}
+
 /* ---------- Mô hình: nạp ngầm ngay khi mở trang ---------- */
 let warmP=null;
 function warmModel(){
-  if(model||warmP||!window.mm)return warmP;
+  if(model||warmP||!window.mm||serverUrl())return warmP;
   warmP=(async()=>{const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã nạp sẵn ở nền','ok')})()
     .catch(()=>{warmP=null;log('Nạp nền chưa được, sẽ nạp khi bắt đầu','wr')});
   return warmP;
@@ -483,13 +515,18 @@ async function load(f,keep){
       step(0,'ok','Bỏ qua: đã là file Sky');loadSky(buf);
     }else{
       step(0,'run','Đang chuẩn bị…');
-      if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
-      if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
-      if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-      log('Giải mã âm thanh (16 kHz mono) rồi nhận dạng nốt piano. Có thể mất vài phút…');
-      const ns=await transcribe(buf);
+      const srv=serverUrl();let ns;
+      if(srv)ns=await transcribeServer(f,srv);
+      else{
+        if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
+        if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
+        if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
+        log('Giải mã âm thanh (16 kHz mono) rồi nhận dạng nốt piano. Có thể mất vài phút…');
+        ns=await transcribe(buf);
+      }
       if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
-      try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
+      if(ns.midi){midiBytes=ns.midi;$('#bMid').hidden=false}
+      else try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
