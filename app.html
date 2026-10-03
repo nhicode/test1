@@ -80,6 +80,12 @@ textarea{height:120px;font:12px ui-monospace,monospace}
   </details>
 </section>
 
+<section id="mplay" hidden>
+  <h2>Nghe MIDI</h2>
+  <div class="ctr"><button id="bMPlay">▶ Phát MIDI</button> <button id="bMStop">■ Dừng</button>
+  <p id="mTime">Phát các track đang chọn, đúng cao độ gốc (chưa quy đổi sang Sky).</p></div>
+</section>
+
 <section id="play" hidden>
   <h2>Nghe thử</h2>
   <div id="keys"></div>
@@ -145,6 +151,7 @@ function tone(i,delay){
   });
 }
 function stop(){
+  stopMidi();
   timers.forEach(clearTimeout);timers=[];clearInterval(sched);sched=null;
   if(master){try{master.gain.cancelScheduledValues(0);master.gain.value=0;master.disconnect()}catch(e){}master=null}
 }
@@ -164,6 +171,51 @@ $('#bPlay').onclick=()=>{
     if(k>=ev.length){clearInterval(sched);sched=null}
   };
   pump();if(k<ev.length)sched=setInterval(pump,250);
+};
+
+/* ---------- Nghe MIDI ---------- */
+let mpG=null,mpSched=null,mpUi=null;
+const fmtT=x=>Math.floor(x/60)+':'+String(Math.floor(x%60)).padStart(2,'0');
+function stopMidi(){
+  clearInterval(mpSched);clearInterval(mpUi);mpSched=mpUi=null;
+  if(mpG){try{mpG.gain.cancelScheduledValues(0);mpG.gain.value=0;mpG.disconnect()}catch(e){}mpG=null}
+}
+function midiNotes(){
+  const a=[];
+  tracks.forEach((t,i)=>{const c=$('#t'+i);if(c&&c.checked)for(const n of t.notes){
+    const s=t2ms(n.tick)/1000,e=n.end!=null?t2ms(n.end)/1000:s+.3;
+    a.push({s,d:Math.max(.08,Math.min(e-s,4)),p:n.n});
+  }});
+  return a.sort((x,y)=>x.s-y.s);
+}
+function pianoNote(p,t,d,dst){
+  const f=440*Math.pow(2,(p-69)/12);
+  [['triangle',1,.16],['sine',2,.05],['sine',3,.02]].forEach(([ty,mul,vol])=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type=ty;o.frequency.value=f*mul;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.005);
+    g.gain.exponentialRampToValueAtTime(.0005,t+d+.5);
+    o.connect(g).connect(dst);o.start(t);o.stop(t+d+.6);
+  });
+}
+$('#bMStop').onclick=()=>{stopMidi();$('#mTime').textContent='Đã dừng';log('Đã dừng phát MIDI')};
+$('#bMPlay').onclick=()=>{
+  const ev=midiNotes();if(!ev.length)return;
+  stop();ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();ctx.resume();
+  const g=mpG=ctx.createGain();g.connect(ctx.destination);
+  const t0=ev[0].s,st=ctx.currentTime+.15,dur=Math.max(...ev.map(e=>e.s+e.d))-t0;let k=0;
+  const pump=()=>{
+    const now=ctx.currentTime;
+    while(k<ev.length&&st+(ev[k].s-t0)<now+2){const e=ev[k++];pianoNote(e.p,Math.max(now,st+e.s-t0),e.d,g)}
+    if(k>=ev.length){clearInterval(mpSched);mpSched=null}
+  };
+  pump();if(k<ev.length)mpSched=setInterval(pump,250);
+  mpUi=setInterval(()=>{
+    const el=Math.max(0,ctx.currentTime-st);
+    if(el>dur+.6){stopMidi();$('#mTime').textContent='Phát xong';return}
+    $('#mTime').textContent=fmtT(Math.min(el,dur))+' / '+fmtT(dur);
+  },250);
+  log('Phát MIDI: '+ev.length+' nốt');
 };
 
 /* ---------- Đọc MIDI ---------- */
@@ -388,7 +440,7 @@ drop.addEventListener('drop',ev=>load(ev.dataTransfer.files[0]));
 fi.onchange=()=>{load(fi.files[0]);fi.value=''};
 
 function showTracks(){
-  $('#opts').hidden=false;
+  $('#opts').hidden=false;$('#mplay').hidden=false;
   $('#tracks').innerHTML='<p><b>Chọn track muốn lấy:</b></p>';
   tracks.forEach((t,i)=>{
     const l=document.createElement('label');
@@ -398,13 +450,13 @@ function showTracks(){
 }
 async function load(f){
   if(!f)return;stop();song=null;midiBytes=null;render();
-  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;
+  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
   [0,1,2].forEach(i=>step(i,'idle','Chờ…'));
   fileName=f.name.replace(/\.[^.]+$/,'');
   log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
   const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('span').textContent='… Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'},500);
   try{
-    const buf=await f.arrayBuffer(),h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
+    let buf=await f.arrayBuffer();const h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
     if(h==='MThd'){
       step(0,'ok','Bỏ qua: file đã là MIDI');log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
       parseMidi(buf);midiBytes=buf;$('#bMid').hidden=false;$('#tol').value=0;$('#name').value=fileName;
@@ -420,6 +472,7 @@ async function load(f){
       log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
       const ns=await model.transcribeFromAudioFile(f);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
+      buf=null; /* bỏ dữ liệu âm thanh gốc, chỉ giữ nốt piano */
       midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
@@ -427,7 +480,7 @@ async function load(f){
       try{
         await dbPut('midi',{blob:new Blob([midiBytes],{type:'audio/midi'}),name:fileName});
         await dbDel('pending');
-        log('Đã xóa MP3 đã lưu, chỉ giữ lại file MIDI','ok');
+        log('Chỉ giữ nốt piano (MIDI); đã bỏ nhạc gốc của video và xóa MP3 đã lưu','ok');
       }catch(e){log('Không dọn được dữ liệu lưu tạm: '+(e.message||e),'wr')}
       tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
       tempos=[{tick:0,us:1000000}];division=1000;
