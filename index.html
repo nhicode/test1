@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tải MP3 TikTok không logo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eceef7;
+    --ink: #15172e;
+    --muted: #5d6180;
+    --line: #cfd3e8;
+    --card: #ffffff;
+    --accent: #4437f5;
+    --accent-ink: #ffffff;
+    --err: #b3261e;
+    --err-bg: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12132a; --ink: #eef0ff; --muted: #9a9ec4; --line: #2c2f57;
+      --card: #1b1d3b; --accent: #7a70ff; --accent-ink: #0d0e22;
+      --err: #ffb4ab; --err-bg: #3a1c1f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+    min-height: 100vh;
+    padding: 56px 20px 40px;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+
+  /* Sóng âm: điểm nhấn duy nhất của trang */
+  .wave { display: flex; align-items: center; gap: 4px; height: 56px; margin-bottom: 20px; }
+  .wave i {
+    display: block; width: 6px; border-radius: 3px; background: var(--accent);
+    height: var(--h); transform-origin: center;
+    animation: bounce 1.6s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 60ms);
+  }
+  @keyframes bounce { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .wave i { animation: none; } }
+
+  h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); line-height: 1.15; font-weight: 800; margin: 0 0 10px; letter-spacing: -.02em; }
+  .lead { color: var(--muted); margin: 0 0 28px; max-width: 52ch; }
+
+  .field {
+    display: flex; gap: 8px; background: var(--card);
+    border: 2px solid var(--line); border-radius: 16px; padding: 8px;
+  }
+  .field:focus-within { border-color: var(--accent); }
+  .field input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+    font: inherit; color: var(--ink); padding: 10px 12px;
+  }
+  .field input::placeholder { color: var(--muted); }
+  button {
+    font: inherit; font-weight: 700; cursor: pointer; border: 0; border-radius: 10px;
+    padding: 10px 18px; background: var(--accent); color: var(--accent-ink);
+  }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button:disabled { opacity: .55; cursor: wait; }
+  button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .error {
+    margin-top: 16px; padding: 12px 14px; border-radius: 12px;
+    background: var(--err-bg); color: var(--err); font-size: .95rem;
+  }
+  .error[hidden], .result[hidden] { display: none; }
+
+  .result {
+    margin-top: 24px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px;
+  }
+  .meta { display: flex; gap: 14px; align-items: center; }
+  .cover {
+    width: 76px; height: 76px; border-radius: 12px; object-fit: cover; flex: none;
+    background: var(--line);
+  }
+  .meta h2 { font-size: 1.05rem; margin: 0; line-height: 1.3; overflow-wrap: anywhere; }
+  .meta p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+  audio { width: 100%; margin: 16px 0 14px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions button { flex: 1 1 160px; }
+  .note { margin-top: 28px; color: var(--muted); font-size: .85rem; max-width: 60ch; }
+
+  @media (max-width: 480px) {
+    .field { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="wave" aria-hidden="true" id="wave"></div>
+
+  <h1>Tải MP3 từ video TikTok</h1>
+  <p class="lead">Dán link video TikTok, nhận file nhạc nền MP3 sạch, không có logo hay watermark.</p>
+
+  <form class="field" id="form" autocomplete="off">
+    <input id="url" type="url" inputmode="url" required aria-label="Link video TikTok"
+           placeholder="https://www.tiktok.com/@user/video/…">
+    <button type="button" class="ghost" id="paste">Dán link</button>
+    <button type="submit" id="go">Lấy MP3</button>
+  </form>
+
+  <div class="error" id="error" role="alert" hidden></div>
+
+  <section class="result" id="result" hidden>
+    <div class="meta">
+      <img class="cover" id="cover" alt="Ảnh bìa video">
+      <div>
+        <h2 id="title"></h2>
+        <p id="author"></p>
+      </div>
+    </div>
+    <audio id="player" controls preload="none"></audio>
+    <div class="actions">
+      <button type="button" id="download">Tải MP3</button>
+      <button type="button" class="ghost" id="open">Mở link trực tiếp</button>
+    </div>
+  </section>
+
+  <p class="note">Chỉ tải nội dung bạn có quyền sử dụng. Nhạc và video trên TikTok thuộc bản quyền của tác giả và chủ sở hữu.</p>
+</main>
+
+<script>
+  // ====== CẤU HÌNH ======
+  // API lấy thông tin video TikTok. Nếu dịch vụ này bị chặn hoặc đổi, thay URL ở đây
+  // (hoặc trỏ tới backend/proxy riêng của bạn, trả về JSON cùng dạng).
+  const API_URL = "https://www.tikwm.com/api/";
+  // ======================
+
+  const $ = (id) => document.getElementById(id);
+  const form = $("form"), urlInput = $("url"), go = $("go");
+  let current = null; // { mp3, filename }
+
+  // Vẽ thanh sóng âm
+  (function drawWave() {
+    const heights = [18, 34, 50, 28, 56, 40, 22, 48, 36, 54, 26, 44, 20, 38, 30];
+    $("wave").innerHTML = heights
+      .map((h, i) => `<i style="--h:${h}px;--i:${i}"></i>`).join("");
+  })();
+
+  function showError(msg) {
+    const el = $("error");
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  function absolute(u) {
+    if (!u) return "";
+    if (u.startsWith("//")) return "https:" + u;
+    if (u.startsWith("/")) return new URL(u, API_URL).href;
+    return u;
+  }
+
+  function safeName(s) {
+    return (s || "tiktok-audio")
+      .replace(/[\\/:*?"<>|#\n\r]+/g, " ")
+      .replace(/\s+/g, " ").trim().slice(0, 80) || "tiktok-audio";
+  }
+
+  $("paste").addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) { urlInput.value = text.trim(); urlInput.focus(); }
+    } catch {
+      showError("Trình duyệt không cho đọc clipboard. Hãy dán link bằng Ctrl+V.");
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showError("");
+    $("result").hidden = true;
+    const link = urlInput.value.trim();
+    if (!/tiktok\.com/i.test(link)) {
+      showError("Link không hợp lệ. Hãy dán link video từ tiktok.com (hoặc vm.tiktok.com).");
+      return;
+    }
+    go.disabled = true; go.textContent = "Đang lấy…";
+    try {
+      const res = await fetch(`${API_URL}?url=${encodeURIComponent(link)}`);
+      if (!res.ok) throw new Error("http " + res.status);
+      const json = await res.json();
+      if (json.code !== 0 || !json.data) {
+        throw new Error(json.msg || "Không lấy được dữ liệu");
+      }
+      const d = json.data;
+      const mp3 = absolute(d.music || (d.music_info && d.music_info.play));
+      if (!mp3) throw new Error("Video này không có file nhạc để tải.");
+      const info = d.music_info || {};
+      const title = info.title || d.title || "Âm thanh TikTok";
+      const author = info.author || (d.author && (d.author.nickname || d.author.unique_id)) || "";
+
+      current = { mp3, filename: safeName(title) + ".mp3" };
+      $("title").textContent = title;
+      $("author").textContent = author;
+      $("cover").src = absolute(info.cover || d.cover || "");
+      $("player").src = mp3;
+      $("result").hidden = false;
+    } catch (err) {
+      const m = String(err.message || err);
+      if (/Free Api Limit|limit/i.test(m)) {
+        showError("Dịch vụ đang giới hạn số lượt gọi. Đợi vài giây rồi thử lại.");
+      } else if (/Failed to fetch|NetworkError|http/i.test(m)) {
+        showError("Không kết nối được tới máy chủ lấy dữ liệu. Kiểm tra mạng, hoặc đổi API_URL trong file index.html.");
+      } else {
+        showError(m);
+      }
+    } finally {
+      go.disabled = false; go.textContent = "Lấy MP3";
+    }
+  });
+
+  $("download").addEventListener("click", async () => {
+    if (!current) return;
+    const btn = $("download");
+    btn.disabled = true; btn.textContent = "Đang tải…";
+    try {
+      const res = await fetch(current.mp3);
+      if (!res.ok) throw new Error("http " + res.status);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = current.filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch {
+      // Nguồn không cho tải trực tiếp (CORS): mở file ở tab mới để lưu thủ công
+      window.open(current.mp3, "_blank", "noopener");
+      showError("Không tải trực tiếp được. File đã mở ở tab mới: nhấn ⋮ rồi chọn Tải xuống.");
+    } finally {
+      btn.disabled = false; btn.textContent = "Tải MP3";
+    }
+  });
+
+  $("open").addEventListener("click", () => {
+    if (current) window.open(current.mp3, "_blank", "noopener");
+  });
+</script>
+</body>
+</html>
