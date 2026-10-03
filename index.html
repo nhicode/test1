@@ -21,6 +21,7 @@ a{color:#06b6d4}
 <h1>Tải MP3 từ link TikTok</h1>
 <p>Dán link video. Tải xong trang tự chuyển sang Sky Studio để xử lý.</p>
 <form id="f" autocomplete="off">
+  <p><label>Nhạc cụ trong video: <select id="inst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label></p>
   <input id="url" type="url" inputmode="url" required placeholder="https://www.tiktok.com/@user/video/…">
   <p><button type="button" id="paste">Dán link</button> <button type="submit" id="go">Tải MP3</button></p>
   <div id="msg" role="status"></div>
@@ -72,7 +73,8 @@ $('#f').addEventListener('submit',async e=>{
     let blob;
     try{const r=await fetch(mp3);if(!r.ok)throw 0;blob=await r.blob()}
     catch(_){say('Nguồn MP3 không cho tải trực tiếp. <a href="'+mp3+'" target="_blank" rel="noopener">Mở MP3</a> để lưu thủ công, rồi vào <a href="app.html">Sky Studio</a> thả file vào.','err',true);return}
-    await dbPut('pending',{blob,name:title+'.mp3'});
+    await dbDel('midi'); /* tải bài mới thì xóa bài cũ */
+    await dbPut('pending',{blob,name:title+'.mp3',inst:$('#inst').value});
     say('Tải xong ('+(blob.size/1048576).toFixed(2)+' MB), đang chuyển sang Sky Studio…','ok');
     location.href='app.html';
   }catch(err){
