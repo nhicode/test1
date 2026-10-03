@@ -3,608 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MP3 → Sky Studio</title>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;800&display=swap" rel="stylesheet">
-<script>try{const u=new URL(location.href);u.searchParams.set('tfjsflags','WEBGL_DELETE_TEXTURE_THRESHOLD:0,WEBGL_FENCE_API_ENABLED:false');history.replaceState(null,'',u)}catch(e){}</script>
-<script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1"></script>
-<script>try{const u=new URL(location.href);u.searchParams.delete('tfjsflags');history.replaceState(null,'',u)}catch(e){}</script>
+<title>Tải MP3 TikTok</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg-main:#090a0f;--bg-card:rgba(17,19,31,.65);--glass-border:rgba(255,255,255,.08);--text-main:#f8fafc;--text-muted:#94a3b8;--c-primary:#8b5cf6;--c-secondary:#ec4899;--c-accent:#06b6d4;--st-run:#a78bfa;--st-ok:#10b981;--st-err:#f43f5e;--st-wr:#f59e0b}
+:root{--text-muted:#94a3b8;--c-primary:#8b5cf6;--c-secondary:#ec4899;--c-accent:#06b6d4;--ok:#10b981;--err:#f43f5e}
 *{box-sizing:border-box}
-body{margin:0;color:var(--text-main);font:14.5px/1.6 "Be Vietnam Pro",system-ui,sans-serif;min-height:100vh;background-color:var(--bg-main);background-image:radial-gradient(circle at 15% 30%,rgba(139,92,246,.15),transparent 40%),radial-gradient(circle at 85% 70%,rgba(236,72,153,.12),transparent 40%),radial-gradient(circle at 50% 0,rgba(6,182,212,.1),transparent 50%);background-attachment:fixed}
-::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:rgba(0,0,0,.2)}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:10px}
-main{max-width:1060px;margin:0 auto;padding:50px 20px 80px}
-h1{font-size:clamp(32px,6vw,56px);line-height:1.1;font-weight:800;letter-spacing:-.03em;margin:0 0 12px;text-align:center}
-h1 i{font-style:normal;background:linear-gradient(135deg,var(--c-accent),var(--c-primary),var(--c-secondary));background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shine 4s linear infinite}
-@keyframes shine{to{background-position:200% center}}
-.sub{color:var(--text-muted);max-width:65ch;margin:0 auto 35px;text-align:center;font-size:15px}
-h2{font-size:18px;margin:0 0 16px;font-weight:600;display:flex;align-items:center;gap:8px}
-h2::before{content:"";width:4px;height:18px;background:linear-gradient(to bottom,var(--c-primary),var(--c-secondary));border-radius:4px}
-.card{background:var(--bg-card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:24px;padding:24px;margin-bottom:20px;box-shadow:0 10px 30px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.05)}
-@keyframes dropPulse{0%{box-shadow:0 0 0 0 rgba(6,182,212,.3)}70%,100%{box-shadow:0 0 0 15px rgba(6,182,212,0)}}
-#drop{display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,.2);border-radius:24px;padding:50px 20px;text-align:center;cursor:pointer;background:rgba(0,0,0,.2);transition:all .4s;margin-bottom:24px}
-#drop:hover,#drop.on,#drop:focus-visible{border-color:var(--c-accent);background:rgba(6,182,212,.08);transform:translateY(-4px);animation:dropPulse 1.5s infinite;outline:0}
-#drop b{display:block;font-size:20px;margin-bottom:8px}#drop span{color:var(--text-muted);font-size:13px}
-.flow{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,6fr);gap:20px;align-items:start}
-@media(max-width:820px){.flow{grid-template-columns:1fr}}
-#steps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
-#steps li{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid var(--glass-border);border-radius:16px;background:rgba(0,0,0,.2);transition:all .3s}
-#steps .dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.2);flex:none;box-shadow:0 0 0 4px rgba(255,255,255,.05)}
-#steps b{display:block;font-weight:600;font-size:15px}#steps small{color:var(--text-muted);font-size:12px}
-#steps li[data-st=run]{border-color:var(--st-run);background:rgba(167,139,250,.05)}#steps li[data-st=run] .dot{background:var(--st-run);animation:pulseDot 1.5s infinite}
-#steps li[data-st=ok]{border-color:rgba(16,185,129,.3)}#steps li[data-st=ok] .dot{background:var(--st-ok);box-shadow:0 0 10px rgba(16,185,129,.5),0 0 0 4px rgba(16,185,129,.1)}
-#steps li[data-st=err]{border-color:rgba(244,63,94,.3)}#steps li[data-st=err] .dot{background:var(--st-err)}
-@keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(167,139,250,.6)}70%,100%{box-shadow:0 0 0 10px rgba(167,139,250,0)}}
-#log{height:280px;overflow:auto;background:#050608;border:1px solid var(--glass-border);border-radius:16px;padding:16px;font:13px/1.7 ui-monospace,Menlo,Consolas,monospace}
-#log div{display:flex;gap:12px;margin-bottom:4px}
-#log time{color:#475569;flex:none;user-select:none}#log span{overflow-wrap:anywhere;color:#cbd5e1}
-#log .ok span{color:var(--st-ok)}#log .err span{color:var(--st-err)}#log .wr span{color:var(--st-wr)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:10px}
-label{display:flex;flex-direction:column;font-size:13px;color:var(--text-muted);font-weight:500}
-input[type=text],input[type=number],input[type=url],select,textarea{width:100%;margin-top:6px;background:rgba(0,0,0,.3);color:var(--text-main);border:1px solid var(--glass-border);border-radius:12px;padding:10px 14px;font:inherit}
-input:focus-visible,select:focus-visible,textarea:focus-visible,.btn:focus-visible,.key:focus-visible{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 4px rgba(6,182,212,.2)}
-input[type=checkbox]{accent-color:var(--c-accent);width:16px;height:16px;cursor:pointer}
-label:has(input[type=checkbox]){flex-direction:row;align-items:center;gap:8px;color:var(--text-main);margin-bottom:4px;cursor:pointer}
-.btn{background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer;transition:all .3s;display:inline-flex;align-items:center;justify-content:center;gap:8px}
-.btn:hover{transform:translateY(-3px);box-shadow:0 10px 25px rgba(236,72,153,.4)}
-.btn:active{transform:scale(.95)}
-.btn.sec{background:rgba(255,255,255,.05);color:var(--text-main);border:1px solid var(--glass-border)}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:16px}
-summary{cursor:pointer;color:var(--c-accent);font-weight:600;margin-bottom:12px;outline:none;list-style:none;display:inline-flex;align-items:center}
-summary::-webkit-details-marker{display:none}summary::before{content:'▸';margin-right:8px;transition:transform .3s}details[open] summary::before{transform:rotate(90deg)}
-#keys{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:420px;margin:20px auto 24px;padding:16px;background:#162235;border-radius:18px;box-shadow:inset 0 0 20px rgba(0,0,0,.3)}
-.key{aspect-ratio:1;background:#223a5c;border-radius:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform .12s,background .12s,box-shadow .12s}
-.key svg{width:100%;height:100%;fill:none;stroke:#fff;stroke-width:1.6px;stroke-linejoin:miter;pointer-events:none}
-.key svg *{vector-effect:non-scaling-stroke}
-.key:hover{background:#2c4a73}
-.key.hit{transform:scale(.92);background:#fdf0cc;box-shadow:0 0 22px rgba(253,240,204,.55)}
-.key.hit svg{stroke:#1b3052}
-#stats{color:var(--text-muted);font-size:13px;text-align:center;margin-top:16px;font-weight:500}
-#rollbox{overflow-x:auto;margin-top:16px;border:1px solid var(--glass-border);border-radius:12px;background:#050608}
-#roll{display:block}
-#rep{font-size:14px;line-height:1.7;margin-top:16px;color:var(--text-muted);background:rgba(0,0,0,.2);padding:16px;border-radius:12px}#rep b{color:var(--c-accent);font-weight:600}
-textarea{height:130px;font-family:monospace;font-size:12px}
-[hidden]{display:none!important}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+body{margin:0;color:#f8fafc;font:14.5px/1.6 "Be Vietnam Pro",system-ui,sans-serif;min-height:100vh;background-color:#090a0f;background-image:radial-gradient(circle at 15% 30%,rgba(139,92,246,.15),transparent 40%),radial-gradient(circle at 85% 70%,rgba(236,72,153,.12),transparent 40%);background-attachment:fixed}
+main{max-width:640px;margin:0 auto;padding:60px 20px}
+h1{font-size:clamp(28px,6vw,44px);line-height:1.15;font-weight:800;margin:0 0 12px;text-align:center}
+.sub{color:var(--text-muted);text-align:center;margin:0 0 30px}
+.card{background:rgba(17,19,31,.65);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:24px}
+input{width:100%;background:rgba(0,0,0,.3);color:#f8fafc;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;font:inherit}
+input:focus-visible{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 4px rgba(6,182,212,.2)}
+.row{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
+.btn{flex:1;background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer}
+.btn.sec{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.btn:disabled{opacity:.6;cursor:wait}
+#msg{margin-top:16px;color:var(--text-muted);min-height:1.6em;overflow-wrap:anywhere}
+#msg.ok{color:var(--ok)}#msg.err{color:var(--err)}
+#msg a{color:var(--c-accent)}
 </style>
 </head>
 <body>
 <main>
-<h1>Từ MP3 đến <i>Sky Studio</i></h1>
-<p class="sub">Thả file nhạc hoặc dán link video TikTok: ứng dụng tự nhận dạng nốt nhạc bằng AI, chuyển thành 15 phím Sky và xuất file ngay lập tức. Mọi quá trình đều chạy an toàn trên trình duyệt của bạn.</p>
-
-<label id="drop" tabindex="0" for="file">
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-  <b>Kéo file âm thanh vào đây hoặc bấm để chọn</b>
-  <span>MP3, WAV, FLAC, M4A, OGG · MIDI · file Sky .txt/.json</span>
-</label>
-<input id="file" type="file" hidden accept=".mp3,.wav,.flac,.m4a,.ogg,.mid,.midi,.txt,.json,.skysheet,audio/*">
-
-<form class="card" id="linkForm" autocomplete="off" style="padding:18px">
-  <label for="url">Hoặc dán link video TikTok, trang tự lấy MP3 rồi chạy tiếp</label>
-  <div class="row" style="margin-top:8px">
-    <input id="url" type="url" inputmode="url" required placeholder="https://www.tiktok.com/@user/video/…" style="margin:0;flex:1 1 260px;width:auto">
+<h1>Tải MP3 từ link TikTok</h1>
+<p class="sub">Dán link video, tải xong trang tự chuyển sang Sky Studio để xử lý.</p>
+<form class="card" id="f" autocomplete="off">
+  <input id="url" type="url" inputmode="url" required placeholder="https://www.tiktok.com/@user/video/…">
+  <div class="row">
     <button type="button" class="btn sec" id="paste">Dán link</button>
-    <button type="submit" class="btn" id="go">Lấy MP3 → Sky</button>
+    <button type="submit" class="btn" id="go">Tải MP3</button>
   </div>
-  <p style="margin:10px 0 0;font-size:12px;color:var(--text-muted)">Chỉ dùng nội dung bạn có quyền sử dụng. Nhạc và video trên TikTok thuộc bản quyền của tác giả và chủ sở hữu.</p>
+  <div id="msg" role="status"></div>
 </form>
-
-<div class="flow">
-  <div>
-    <ol id="steps">
-      <li id="s3" data-st="idle"><i class="dot"></i><div><b>Lấy MP3 từ link</b><small>Chờ link hoặc file</small></div></li>
-      <li id="s0" data-st="idle"><i class="dot"></i><div><b>Nhận dạng nốt</b><small>Chờ file</small></div></li>
-      <li id="s1" data-st="idle"><i class="dot"></i><div><b>Quy đổi sang 15 phím</b><small>Chờ file</small></div></li>
-      <li id="s2" data-st="idle"><i class="dot"></i><div><b>Sẵn sàng xuất</b><small>Chờ file</small></div></li>
-    </ol>
-    <div class="row" style="margin-top:20px"><button class="btn sec" id="bMid" hidden>Tải MIDI vừa nhận dạng</button><button class="btn sec" id="bOpen" hidden>Mở MP3 để lưu thủ công</button></div>
-  </div>
-  <div class="card" style="margin:0"><h2>Nhật ký hệ thống</h2><div id="log" role="log" aria-live="polite"></div></div>
-</div>
-
-<div class="card" id="opts" hidden style="margin-top:24px">
-  <details open><summary>Thông tin bài hát & Tùy chỉnh AI</summary>
-  <div class="grid">
-    <label>Tên bài hát<input id="name" type="text" placeholder="Nhập tên bài..."></label>
-    <label>Ca sĩ / Tác giả<input id="author" type="text" placeholder="Nhập tên tác giả..."></label>
-    <label>Người chuyển soạn<input id="by" type="text" placeholder="Nhập tên bạn..."></label>
-    <label>BPM của game (trống = tự dò)<input id="bpmfix" type="number" min="30" max="2000" step="any" placeholder="Để trống để tự dò"></label>
-    <label>Sai số cho phép (ms)<input id="tol" type="number" value="0" min="0" step="any"></label>
-    <label>BPM tối đa của game<input id="maxbpm" type="number" value="1000" min="60" max="2000"></label>
-    <label>Nốt kéo dài (lặp lại)
-      <select id="sus"><option value="0">Tắt</option><option value="150">Lặp mỗi 150 ms</option><option value="250">Lặp mỗi 250 ms</option><option value="400">Lặp mỗi 400 ms</option></select></label>
-    <label>Dịch tông (nửa cung)
-      <select id="tr"><option value="auto">Tự động (khớp C trưởng)</option></select></label>
-    <label>Tối đa nốt đánh cùng lúc
-      <select id="poly"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option selected>10</option></select></label>
-    <label>Dịch quãng tám
-      <select id="oct"><option value="auto">Tự động</option><option>-2</option><option>-1</option><option>0</option><option>1</option><option>2</option></select></label>
-    <label>Nốt thăng/giáng
-      <select id="acc"><option value="follow">Theo giai điệu</option><option value="down">Hạ xuống</option><option value="up">Nâng lên</option></select></label>
-    <label>Tốc độ (%)<input id="speed" type="number" value="100" min="25" max="300"></label>
-    <label style="align-self:end"><input type="checkbox" id="dec"> Cho phép BPM thập phân</label>
-  </div>
-  <div class="row" id="tracks" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--glass-border)"></div>
-  </details>
-</div>
-
-<div class="card" id="play" hidden>
-  <h2>Nghe thử Bản nhạc</h2>
-  <div id="keys"></div>
-  <div class="row" style="justify-content:center">
-    <button class="btn" id="bPlay"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Phát nhạc</button>
-    <button class="btn sec" id="bStop"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg> Dừng</button>
-  </div>
-  <div id="stats"></div>
-  <div id="rollbox"><canvas id="roll"></canvas></div>
-  <div id="rep"></div>
-</div>
-
-<div class="card" id="out" hidden>
-  <h2>Xuất File Hoàn Tất</h2>
-  <div class="row" style="margin-top:16px">
-    <button class="btn" id="bTxt">⬇ Tải .txt (UTF-16)</button>
-    <button class="btn sec" id="bJson">⬇ Tải .json</button>
-    <button class="btn sec" id="bCopy">Sao chép Code JSON</button>
-  </div>
-  <details style="margin-top:20px"><summary>Xem chi tiết nội dung JSON</summary><textarea id="json" readonly></textarea></details>
-</div>
 </main>
 <script>
 const $=s=>document.querySelector(s);
-const SC=[0,2,4,5,7,9,11];
-const keyMidi=i=>60+12*Math.floor(i/7)+SC[i%7];
-const CKPT='https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
-let tracks=[],tempos=[],division=480,song=null,fileName='bai-nhac',ctx=null,timers=[],model=null,midiBytes=null,T0=performance.now(),busy=0;
-
-/* ---------- Nhật ký + các bước ---------- */
-function log(msg,cls=''){
-  const L=$('#log'),s=(performance.now()-T0)/1000,d=document.createElement('div');
-  d.className=cls;
-  d.innerHTML='<time>'+String(Math.floor(s/60)).padStart(2,'0')+':'+(s%60).toFixed(1).padStart(4,'0')+'</time><span></span>';
-  d.lastChild.textContent=msg;L.appendChild(d);L.scrollTop=L.scrollHeight;
-}
-function step(i,st,txt){const e=$('#s'+i);e.dataset.st=st;if(txt!=null)e.querySelector('small').textContent=txt}
-const frame=()=>new Promise(r=>setTimeout(r,30));
-
-/* ---------- Bàn phím 15 nút + nghe thử ---------- */
-const keysEl=$('#keys');
-const SH=['c','d','o','d','o','o','d','c','d','o','o','d','o','d','c'];
-const SVGS={o:'<circle cx="50" cy="50" r="25"/>',d:'<path d="M50 20L80 50L50 80L20 50Z"/>',c:'<path d="M50 12L88 50L50 88L12 50Z"/><circle cx="50" cy="50" r="27"/>'};
-for(let i=0;i<15;i++){
-  const b=document.createElement('div');b.className='key';b.id='k'+i;b.tabIndex=0;b.setAttribute('aria-label','Phím '+i);
-  b.innerHTML='<svg viewBox="0 0 100 100" aria-hidden="true">'+SVGS[SH[i]]+'</svg>';
-  b.addEventListener('pointerdown',()=>{tone(i,0);flash(i,160)});
-  keysEl.appendChild(b);
-}
-function flash(i,ms){const e=$('#k'+i);e.classList.add('hit');setTimeout(()=>e.classList.remove('hit'),ms)}
-let master=null,sched=null;
-function out(){ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(!master){master=ctx.createGain();master.connect(ctx.destination)}return master}
-function tone(i,delay){
-  const dst=out(),f=440*Math.pow(2,(keyMidi(i)-69)/12),t=ctx.currentTime+delay;
-  [['triangle',1,.3],['sine',2,.08]].forEach(([ty,mul,vol])=>{
-    const o=ctx.createOscillator(),g=ctx.createGain();
-    o.type=ty;o.frequency.value=f*mul;
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.008);g.gain.exponentialRampToValueAtTime(.001,t+.9);
-    o.connect(g).connect(dst);o.start(t);o.stop(t+1);
-  });
-}
-function stop(){
-  timers.forEach(clearTimeout);timers=[];clearInterval(sched);sched=null;
-  if(master){try{master.gain.cancelScheduledValues(0);master.gain.value=0;master.disconnect()}catch(e){}master=null}
-}
-$('#bStop').onclick=()=>{stop();log('Đã dừng phát')};
-$('#bPlay').onclick=()=>{
-  if(!song)return;stop();out();ctx.resume();
-  const Lg=60000/(song.bpm||120);
-  const ev=song.songNotes.map(n=>({i:+n.key.replace(/^\dKey/,''),t:Math.floor(n.time/Lg)*Lg})).sort((a,b)=>a.t-b.t);
-  if(!ev.length)return;
-  const t0=ev[0].t,st=ctx.currentTime+.15;let k=0;
-  const pump=()=>{
-    const now=ctx.currentTime;
-    while(k<ev.length&&st+(ev[k].t-t0)/1000<now+2){
-      const e=ev[k++],d=Math.max(0,st+(e.t-t0)/1000-now);
-      tone(e.i,d);timers.push(setTimeout(()=>flash(e.i,140),d*1000));
-    }
-    if(k>=ev.length){clearInterval(sched);sched=null}
-  };
-  pump();if(k<ev.length)sched=setInterval(pump,250);
-};
-
-/* ---------- Đọc MIDI ---------- */
-function parseMidi(buf){
-  const d=new DataView(buf);let p=0;
-  const str=n=>{let s='';for(let i=0;i<n;i++)s+=String.fromCharCode(d.getUint8(p++));return s};
-  if(str(4)!=='MThd')throw new Error('Đây không phải file MIDI hợp lệ.');
-  p+=4;p+=2;const nt=d.getUint16(p);p+=2;division=d.getUint16(p);p+=2;
-  if(division&0x8000)throw new Error('MIDI dùng nhịp SMPTE, chưa được hỗ trợ.');
-  tracks=[];tempos=[];
-  for(let t=0;t<nt&&p<d.byteLength;t++){
-    const id=str(4),len=d.getUint32(p);p+=4;const end=p+len;
-    if(id!=='MTrk'){p=end;continue}
-    let tick=0,rs=0,name='',notes=[],act={};
-    const vl=()=>{let v=0,b;do{b=d.getUint8(p++);v=(v<<7)|(b&127)}while(b&128);return v};
-    while(p<end){
-      tick+=vl();let s=d.getUint8(p);
-      if(s===0xFF){
-        p++;const ty=d.getUint8(p++),l=vl();
-        if(ty===0x51)tempos.push({tick,us:(d.getUint8(p)<<16)|(d.getUint8(p+1)<<8)|d.getUint8(p+2)});
-        if(ty===0x03){name='';for(let i=0;i<l;i++)name+=String.fromCharCode(d.getUint8(p+i))}
-        p+=l;
-      }else if(s===0xF0||s===0xF7){p++;p+=vl()}
-      else{
-        if(s&128){rs=s;p++}else s=rs;
-        const hi=s>>4,ch=s&15;
-        if(hi===9||hi===8){const n=d.getUint8(p++),v=d.getUint8(p++),k=ch*128+n;
-          if(ch!==9){const a=act[k];
-            if(hi===9&&v>0){if(a)a.end=tick;const o={tick,n,end:null};notes.push(o);act[k]=o}
-            else if(a){a.end=tick;delete act[k]}}}
-        else if(hi===0xC||hi===0xD)p+=1;else p+=2;
-      }
-    }
-    p=end;
-    if(notes.length)tracks.push({name:name||('Track '+(tracks.length+1)),notes});
-  }
-  tempos.sort((a,b)=>a.tick-b.tick);
-  if(!tracks.length)throw new Error('Không tìm thấy nốt nhạc nào (kênh trống bị bỏ qua).');
-}
-function t2ms(tick){
-  let ms=0,lt=0,us=500000;
-  for(const t of tempos){if(t.tick>=tick)break;ms+=(t.tick-lt)*us/1000/division;lt=t.tick;us=t.us}
-  return ms+(tick-lt)*us/1000/division;
-}
-
-/* ---------- Quy đổi sang Sky ---------- */
-const foldOct=m=>{let k=0;while(m<60){m+=12;k++}while(m>84){m-=12;k++}return{m,k}};
-const keyIdx=m=>Math.floor((m-60)/12)*7+SC.indexOf(m%12);
-function mapPitch(m0,prev,mode){
-  const f=foldOct(m0),m=f.m;
-  if(SC.includes(m%12))return{i:keyIdx(m),acc:false,k:f.k};
-  const lo=keyIdx(m-1),hi=keyIdx(m+1);let i;
-  if(mode==='up')i=hi;else if(mode==='down')i=lo;
-  else if(prev==null)i=lo;else i=Math.abs(hi-prev)<Math.abs(lo-prev)?hi:lo;
-  return{i,acc:true,k:f.k};
-}
-async function convert(){
-  const run=++busy,all=[];
-  tracks.forEach((t,i)=>{if($('#t'+i).checked)all.push(...t.notes)});
-  if(!all.length){song=null;render();return}
-  step(1,'run','Đang quy đổi…');log('Bắt đầu quy đổi '+all.length+' nốt sang 15 phím Sky');
-  await frame();if(run!==busy)return;
-  try{
-  const hist=new Array(128).fill(0);all.forEach(n=>hist[n.n]++);
-  const shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
-  let bc=Infinity,sh=0,oc=0;
-  for(const a of shSel==='auto'?rng(-11,11):[+shSel])for(const o of ocSel==='auto'?rng(-3,3):[+ocSel]){
-    const S=a+12*o;let c=0;
-    for(let p=0;p<128;p++)if(hist[p]){const f=foldOct(p+S);c+=hist[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}
-    c+=.01*Math.abs(a)+.0001*Math.abs(o);
-    if(c<bc){bc=c;sh=a;oc=o}
-  }
-  log('Chọn dịch tông '+(sh>0?'+':'')+sh+' nửa cung, '+(oc>0?'+':'')+oc+' quãng tám');
-  const S=sh+12*oc,mode=$('#acc').value;
-  const spd=Math.max(.25,Math.min(3,(+$('#speed').value||100)/100));
-  const poly=Math.max(1,+$('#poly').value||10);
-  const pts=all.map(n=>({tick:n.tick,t:t2ms(n.tick)/spd,dur:n.end!=null?(t2ms(n.end)-t2ms(n.tick))/spd:0,m:n.n+S})).sort((a,b)=>a.tick-b.tick);
-  let prev=null;
-  for(const p of pts){const r=mapPitch(p.m,prev,mode);p.key=r.i;p.acc=r.acc;p.fold=r.k;prev=r.i}
-
-  const on=[];
-  for(const p of pts){const o=on[on.length-1];if(o&&p.t-o.t<=15)o.list.push(p);else on.push({t:p.t,list:[p]})}
-  log('Gom thành '+on.length+' thời điểm đánh');
-
-  log('Đang dò BPM của game…');await frame();if(run!==busy)return;
-  const manual=+$('#bpmfix').value,dec=$('#dec').checked,sus=+$('#sus').value;
-  const tolIn=parseFloat($('#tol').value),tolMs=Math.max(.01,isNaN(tolIn)?0:tolIn);
-  const maxIn=parseFloat($('#maxbpm').value),maxB=Math.max(30,isNaN(maxIn)?500:maxIn);
-  const evalB=(bpm,set)=>{
-    const L=60000/bpm;let c=0,s=0;
-    for(const o of set){const a=o.t/L*2*Math.PI;c+=Math.cos(a);s+=Math.sin(a)}
-    let t0=Math.atan2(s,c)/(2*Math.PI)*L,lo=1e9,hi=-1e9;
-    for(const o of set){const x=(o.t-t0)/L,e=(x-Math.round(x))*L;if(e<lo)lo=e;if(e>hi)hi=e}
-    t0+=(lo+hi)/2;
-    let col=0,pr=NaN;
-    for(const o of set){const r=Math.round((o.t-t0)/L);if(r===pr)col++;pr=r}
-    return{bpm,L,t0,mx:(hi-lo)/2,col};
-  };
-  const fmt=b=>dec?Math.round(b*1e6)/1e6:Math.round(b);
-  let g;
-  if(manual>0)g=evalB(manual,on);
-  else if(fromAudio&&on.length>8){
-    const hiB=Math.min(maxB,900),loB=Math.min(150,hiB),sc=[];
-    for(let b=loB;b<=hiB;b++){const L=60000/b;let c=0,s=0;for(const o of on){const a=o.t/L*2*Math.PI;c+=Math.cos(a);s+=Math.sin(a)}sc.push({b,R:Math.hypot(c,s)/on.length})}
-    const Rm=Math.max(...sc.map(x=>x.R)),pick=sc.find(x=>x.R>=.95*Rm);
-    log('Nốt từ âm thanh: chọn lưới '+pick.b+' BPM (độ khớp '+Math.round(pick.R*100)+'%, tốt nhất '+Math.round(Rm*100)+'%)');
-    g=evalB(pick.b,on);
-  }else{
-    const set=new Set(),us=new Set([tempos.length?tempos[0].us:500000,...tempos.slice(0,40).map(x=>x.us)]);
-    for(const u of us)for(const d of [1,2,3,4,6,8,12,16])set.add(fmt(6e7/u*d));
-    for(let b=30;b<=maxB;b++)set.add(b);
-    const cands=[...set].filter(b=>b>=30&&b<=maxB).sort((a,b)=>a-b).map(b=>evalB(b,on)).filter(c=>c.col===0);
-    g=cands.find(c=>c.mx<=tolMs);
-    if(!g&&cands.length){const m=Math.min(...cands.map(c=>c.mx));g=cands.find(c=>c.mx<=m*1.05+1e-9)}
-    if(!g)g=evalB(maxB,on);
-  }
-  const bpm=g.bpm,Lg=60000/bpm;
-  log('BPM game = '+bpm+' (1 ô = '+Lg.toFixed(2)+' ms), lệch tối đa '+g.mx.toFixed(2)+' ms','ok');
-
-  const START=4,errs=[],cellKeys=new Map();
-  let last=-1e9,c0=null,pushed=0,cLast=0;
-  for(const o of on){
-    const x=(o.t-g.t0)/Lg;let c=Math.round(x);
-    if(c<=last){c=last+1;pushed++}
-    last=c;if(c0===null)c0=c;o.c=c-c0+START;cLast=o.c;
-    errs.push(Math.abs((c-x)*Lg));
-    const m=new Map();for(const p of o.list)m.set(p.key,p);
-    o.merged=o.list.length-m.size;
-    const ks=[...m.keys()].sort((a,b)=>b-a).slice(0,poly);
-    o.kept=new Set(ks);cellKeys.set(o.c,new Set(ks));
-  }
-  let repeats=0;
-  if(sus>0){
-    const k=Math.max(1,Math.round(sus/Lg));
-    for(const o of on)for(const p of o.list){
-      if(!o.kept.has(p.key)||p.dur<=2*sus)continue;
-      const end=o.c+Math.round(p.dur/Lg);
-      for(let c=o.c+k;c<end;c+=k){
-        const st=cellKeys.get(c)||new Set();
-        if(st.has(p.key)||st.size>=poly)continue;
-        st.add(p.key);cellKeys.set(c,st);repeats++;
-      }
-    }
-    log('Nốt kéo dài: thêm '+repeats+' lần bấm lặp');
-  }
-  const notes=[];
-  for(const c of [...cellKeys.keys()].sort((a,b)=>a-b)){
-    const t=Math.ceil(c*Lg)+1;
-    [...cellKeys.get(c)].sort((a,b)=>a-b).forEach(k=>notes.push({time:t,key:'1Key'+k}));
-  }
-
-  let exact=0,acc=0,fold=0,drop=0;
-  for(const o of on)for(const p of o.list){
-    if(!o.kept.has(p.key)){drop++;continue}
-    if(p.acc)acc++;else if(p.fold)fold++;else exact++;}
-  errs.sort((a,b)=>a-b);
-  const mean=errs.reduce((a,b)=>a+b,0)/errs.length,mx=errs[errs.length-1];
-  const N=pts.length,pc=x=>(x/N*100).toFixed(1)+'%',cells=Math.max(cLast,...cellKeys.keys())-START+1;
-  const rows=[
-    ['Tổng nốt',N],['BPM game / độ dài 1 ô',bpm+' / '+Lg.toFixed(2)+' ms'],
-    ['Lệch thời gian TB / tối đa',mean.toFixed(2)+' / '+mx.toFixed(2)+' ms'],
-    ['Thời điểm đánh / ô nghỉ',on.length+' / '+Math.max(0,cells-cellKeys.size)],
-    ['Đẩy sang ô kế vì trùng ô',pushed],
-    ['Giữ nguyên cao độ',exact+' ('+pc(exact)+')'],
-    ['Thăng/giáng phải xê nửa cung',acc+' ('+pc(acc)+')'],
-    ['Nốt bị gập quãng tám',fold+' ('+pc(fold)+')'],
-    ['Nốt bị bỏ vì vượt '+poly+' nốt cùng lúc',drop]];
-  if(drop)log('Bỏ '+drop+' nốt vì vượt giới hạn '+poly+' nốt cùng lúc','wr');
-  if(pushed)log('Đẩy '+pushed+' thời điểm sang ô kế vì trùng ô','wr');
-  song={name:$('#name').value,author:$('#author').value,transcribedBy:$('#by').value,
-    isComposed:true,bpm,bitsPerPage:16,pitchLevel:0,isEncrypted:false,songNotes:notes};
-  song._info='BPM '+bpm+' • dịch '+(sh>0?'+':'')+sh+' nửa cung, '+(oc>0?'+':'')+oc+' quãng tám';
-  song._rep='<b>Báo cáo độ chính xác</b><br>'+rows.map(r=>r[0]+': <b>'+r[1]+'</b>').join('<br>');
-  step(1,'ok','BPM '+bpm+' · '+notes.length+' nốt Sky');
-  step(2,'ok','Có thể tải .txt hoặc .json');
-  log('Hoàn tất: '+notes.length+' nốt Sky, sẵn sàng tải về','ok');
-  render();
-  }catch(e){step(1,'err','Lỗi');log('Lỗi quy đổi: '+(e.message||e),'err')}
-}
-
-/* ---------- Piano roll ---------- */
-function drawRoll(){
-  const cv=$('#roll'),n=song.songNotes;if(!n.length){cv.width=1;return}
-  const Lg=60000/(song.bpm||120),cs=n.map(x=>({c:Math.floor(x.time/Lg),k:+x.key.replace(/^\dKey/,'')}));
-  let c0=Infinity,c1=-Infinity;for(const a of cs){if(a.c<c0)c0=a.c;if(a.c>c1)c1=a.c}
-  const W=8,H=10,cols=Math.min(c1-c0+1,2000);
-  cv.width=cols*W;cv.height=15*H;
-  const x=cv.getContext('2d');x.fillStyle='#050608';x.fillRect(0,0,cv.width,cv.height);
-  x.fillStyle='#1e293b';for(let c=0;c<cols;c+=4)x.fillRect(c*W,0,1,cv.height);
-  x.fillStyle='#06b6d4';
-  for(const a of cs){const c=a.c-c0;if(c<cols)x.fillRect(c*W+1,(14-a.k)*H+1,W-2,H-2)}
-}
-function render(){
-  const has=!!song;
-  $('#play').hidden=$('#out').hidden=!has;
-  if(!has)return;
-  const n=song.songNotes,dur=n.length?(n[n.length-1].time-n[0].time)/1000:0;
-  $('#stats').textContent=n.length+' nốt • '+Math.floor(dur/60)+':'+String(Math.floor(dur%60)).padStart(2,'0')+(song._info?' • '+song._info:'');
-  $('#json').value=toJSON();
-  $('#rep').innerHTML=song._rep||'';
-  drawRoll();
-}
-function toJSON(){const o={...song};delete o._info;delete o._rep;return JSON.stringify([o])}
-
-/* ---------- Xuất file ---------- */
-function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
-const safe=()=>(($('#name').value||fileName).replace(/[\\/:*?"<>|]+/g,'_'));
-$('#bTxt').onclick=()=>{
-  const s=toJSON(),u=new Uint16Array(s.length+1);u[0]=0xFEFF;
-  for(let i=0;i<s.length;i++)u[i+1]=s.charCodeAt(i);
-  download(safe()+'.txt',new Blob([u],{type:'text/plain'}));log('Đã tải '+safe()+'.txt','ok');
-};
-$('#bJson').onclick=()=>{download(safe()+'.json',new Blob([toJSON()],{type:'application/json'}));log('Đã tải '+safe()+'.json','ok')};
-$('#bCopy').onclick=async()=>{try{await navigator.clipboard.writeText(toJSON());$('#bCopy').textContent='Đã sao chép ✓'}catch(e){$('#json').select();document.execCommand('copy')}setTimeout(()=>$('#bCopy').textContent='Sao chép Code JSON',1500)};
-$('#bMid').onclick=async()=>{
-  if(!midiBytes)return;
-  const f=new File([midiBytes],fileName+'.mid',{type:'audio/midi'});
-  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:f.name});return}catch(e){if(e.name==='AbortError')return}}
-  download(fileName+'.mid',new Blob([midiBytes],{type:'application/octet-stream'}));log('Đã tải '+fileName+'.mid','ok');
-};
-
-/* ---------- Nhập file ---------- */
-for(let t=-11;t<=11;t++){const o=document.createElement('option');o.value=t;o.textContent=(t>0?'+':'')+t;$('#tr').appendChild(o)}
-const drop=$('#drop'),fi=$('#file');
-drop.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fi.click()}};
-['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('on')}));
-['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('on')}));
-drop.addEventListener('drop',ev=>load(ev.dataTransfer.files[0]));
-fi.onchange=()=>{load(fi.files[0]);fi.value=''};
-
-function showTracks(){
-  $('#opts').hidden=false;
-  $('#tracks').innerHTML='<b style="width:100%;font-size:13px;color:var(--text-muted);margin-bottom:8px">Chọn track muốn lấy:</b>';
-  tracks.forEach((t,i)=>{
-    const l=document.createElement('label');
-    l.innerHTML='<input type="checkbox" id="t'+i+'" checked> <span>'+t.name.replace(/</g,'&lt;')+' ('+t.notes.length+' nốt)</span>';
-    $('#tracks').appendChild(l);
-  });
-}
-let mp3Url=null,fromAudio=false;
-function resetRun(){
-  stop();song=null;midiBytes=null;mp3Url=null;fromAudio=false;render();
-  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=$('#bOpen').hidden=true;$('#opts').hidden=true;
-  [0,1,2,3].forEach(i=>step(i,'idle','Chờ…'));
-}
-$('#bOpen').onclick=()=>mp3Url&&window.open(mp3Url,'_blank','noopener');
-
-/* ---------- Mô hình: nạp ngầm ngay khi mở trang ---------- */
-let warmP=null;
-function warmModel(){
-  if(model||warmP||!window.mm)return warmP;
-  warmP=(async()=>{const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã nạp sẵn ở nền','ok')})()
-    .catch(()=>{warmP=null;log('Nạp nền chưa được, sẽ nạp khi bắt đầu','wr')});
-  return warmP;
-}
-
-async function load(f,keep){
-  if(!f)return;
-  if(!keep){resetRun();step(3,'ok','Bỏ qua: dùng file có sẵn')}
-  fileName=f.name.replace(/\.[^.]+$/,'');
-  log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
-  const timer=setInterval(()=>{const e=$('#s0');if(e.dataset.st==='run')e.querySelector('small').textContent='Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'+(window.PROG||'')},500);
-  try{
-    const buf=await f.arrayBuffer(),h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
-    if(h==='MThd'){
-      step(0,'ok','Bỏ qua: file đã là MIDI');log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
-      parseMidi(buf);$('#tol').value=0;$('#name').value=fileName;
-      log('Đọc được '+tracks.length+' track, '+tracks.reduce((a,t)=>a+t.notes.length,0)+' nốt');
-      showTracks();await convert();
-    }else if(/\.(txt|json|skysheet)$/i.test(f.name)||f.type==='text/plain'||f.type==='application/json'){
-      step(0,'ok','Bỏ qua: đã là file Sky');loadSky(buf);
-    }else{
-      step(0,'run','Đang chuẩn bị…');
-      if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
-      if(warmP){log('Chờ mô hình nạp nền xong…');await warmP}
-      if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-      log('Giải mã âm thanh rồi nhận dạng CẢ BÀI một lượt, không chia đoạn. Có thể mất vài phút, đừng đóng trang…');
-      const ns=await transcribe(buf);
-      if(!ns.notes.length)throw new Error('Không phát hiện nốt piano nào trong file.');
-      try{midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false}catch(e){log('Không tạo được file MIDI để tải (vẫn tiếp tục chuyển sang Sky)','wr')}
-      log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
-      step(0,'ok',ns.notes.length+' nốt');
-      tracks=[{name:'Piano nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
-      tempos=[{tick:0,us:1000000}];division=1000;fromAudio=true;
-      $('#tol').value=35;$('#name').value=fileName;
-      log('Tự điền sai số 35 ms vì thời gian nốt nhận dạng từ âm thanh không tròn nhịp');
-      showTracks();await convert();
-    }
-  }catch(e){
-    const i=$('#s0').dataset.st==='run'?0:1;step(i,'err','Lỗi');log('Lỗi: '+(e.message||e),'err');
-    if(/WebGL|sync|context/i.test(String(e.message||e)))log('Gợi ý: GPU của trình duyệt bị lỗi hoặc hết bộ nhớ. Đóng bớt tab, tải lại trang rồi thử lại, hoặc dùng máy tính.','wr');
-  }finally{clearInterval(timer)}
-}
-
-/* ---------- Dán link TikTok ---------- */
-const API_URL='https://www.tikwm.com/api/';
+const API='https://www.tikwm.com/api/';
 const absUrl=u=>!u?'':u.startsWith('//')?'https:'+u:u.startsWith('/')?'https://www.tikwm.com'+u:u;
-$('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){log('Trình duyệt không cho đọc clipboard, hãy dán bằng Ctrl+V','wr')}};
-$('#linkForm').addEventListener('submit',async e=>{
-  e.preventDefault();const link=$('#url').value.trim(),go=$('#go');
-  resetRun();
-  if(!/tiktok\.com/i.test(link)){step(3,'err','Link không hợp lệ');log('Link không hợp lệ: hãy dán link từ tiktok.com hoặc vm.tiktok.com','err');return}
-  go.disabled=true;warmModel();
+const say=(t,c='',html)=>{const m=$('#msg');m.className=c;html?m.innerHTML=t:m.textContent=t};
+
+$('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){say('Trình duyệt không cho đọc clipboard, hãy dán thủ công.','err')}};
+
+/* Lưu file vào IndexedDB để app.html (cùng trang web) lấy ra */
+function handoff(blob,name){
+  return new Promise((res,rej)=>{
+    const q=indexedDB.open('sky-handoff',1);
+    q.onupgradeneeded=()=>q.result.createObjectStore('f');
+    q.onerror=()=>rej(q.error);
+    q.onsuccess=()=>{
+      const tx=q.result.transaction('f','readwrite');
+      tx.objectStore('f').put({blob,name},'pending');
+      tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
+    };
+  });
+}
+
+$('#f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const link=$('#url').value.trim(),go=$('#go');
+  if(!/tiktok\.com/i.test(link)){say('Link không hợp lệ: hãy dán link từ tiktok.com hoặc vm.tiktok.com','err');return}
+  go.disabled=true;
   try{
-    step(3,'run','Đang lấy thông tin video…');log('Gọi API lấy thông tin video TikTok…');
-    const res=await fetch(API_URL+'?url='+encodeURIComponent(link));
+    say('Đang lấy thông tin video…');
+    const res=await fetch(API+'?url='+encodeURIComponent(link));
     if(!res.ok)throw new Error('API trả về lỗi '+res.status);
     const j=await res.json();
     if(j.code!==0||!j.data)throw new Error(j.msg||'Không lấy được dữ liệu video');
-    const d=j.data,inf=d.music_info||{};
-    mp3Url=absUrl(d.music||inf.play);if(!mp3Url)throw new Error('Video này không có file nhạc để tải.');
-    const title=inf.title||d.title||'tiktok-audio',author=inf.author||(d.author&&(d.author.nickname||d.author.unique_id))||'';
-    log('Tìm thấy nhạc: '+title+(author?' / '+author:''),'ok');
-    step(3,'run','Đang tải MP3…');log('Tải file MP3 về trình duyệt…');
+    const d=j.data,inf=d.music_info||{},mp3=absUrl(d.music||inf.play);
+    if(!mp3)throw new Error('Video này không có file nhạc để tải.');
+    const title=(inf.title||d.title||'tiktok-audio').replace(/[\\/:*?"<>|#\n\r]+/g,' ').replace(/\s+/g,' ').trim().slice(0,80)||'tiktok-audio';
+    say('Đang tải MP3…');
     let blob;
-    try{const r=await fetch(mp3Url);if(!r.ok)throw 0;blob=await r.blob()}
-    catch(_){$('#bOpen').hidden=false;throw new Error('Nguồn MP3 không cho tải trực tiếp (CORS). Bấm "Mở MP3 để lưu thủ công", lưu file rồi thả vào ô phía trên.')}
-    const nm=title.replace(/[\\/:*?"<>|#\n\r]+/g,' ').replace(/\s+/g,' ').trim().slice(0,80)||'tiktok-audio';
-    step(3,'ok',(blob.size/1048576).toFixed(2)+' MB');log('Đã tải MP3 ('+(blob.size/1048576).toFixed(2)+' MB), chuyển sang nhận dạng','ok');
-    $('#author').value=author;
-    await load(new File([blob],nm+'.mp3',{type:'audio/mpeg'}),true);
+    try{const r=await fetch(mp3);if(!r.ok)throw 0;blob=await r.blob()}
+    catch(_){say('Nguồn MP3 không cho tải trực tiếp. <a href="'+mp3+'" target="_blank" rel="noopener">Mở MP3</a> để lưu thủ công, rồi vào <a href="app.html">Sky Studio</a> thả file vào.','err',true);return}
+    await handoff(blob,title+'.mp3');
+    say('Tải xong ('+(blob.size/1048576).toFixed(2)+' MB), đang chuyển sang Sky Studio…','ok');
+    location.href='app.html';
   }catch(err){
     let m=String(err.message||err);
     if(/limit/i.test(m))m='Dịch vụ đang giới hạn số lượt gọi, đợi vài giây rồi thử lại.';
     else if(/Failed to fetch|NetworkError/i.test(m))m='Không kết nối được tới máy chủ lấy dữ liệu, hãy kiểm tra mạng.';
-    step(3,'err','Lỗi');log('Lỗi: '+m,'err');
+    say('Lỗi: '+m,'err');
   }finally{go.disabled=false}
 });
-
-/* Khi WebGL bị mất: bỏ mô hình cũ, chuyển sang CPU nếu được, nạp lại */
-async function recover(){
-  try{model.dispose&&model.dispose()}catch(e){}
-  const T=window.tf||(window.mm&&mm.tf);
-  if(T&&T.setBackend){try{await T.setBackend('cpu');log('Đã chuyển sang CPU (chậm hơn nhưng ổn định)','wr')}catch(e){log('Không chuyển được sang CPU','wr')}}
-  const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;
-}
-/* Nhận dạng NGUYÊN bài một lượt: giải mã 16 kHz mono rồi đưa cả mảng vào mô hình, không cắt đoạn */
-async function transcribe(buf){
-  const SR=16000,AC=window.AudioContext||window.webkitAudioContext,dctx=new AC({sampleRate:SR});
-  let ab=await dctx.decodeAudioData(buf);
-  const len0=ab.length,from=ab.sampleRate,nch=ab.numberOfChannels;
-  let mono=new Float32Array(len0);
-  for(let c=0;c<nch;c++){const d=ab.getChannelData(c);for(let i=0;i<len0;i++)mono[i]+=d[i]/nch}
-  ab=null;dctx.close&&dctx.close();
-  if(from!==SR){const r=from/SR,m=Math.floor(len0/r),y=new Float32Array(m);
-    for(let i=0;i<m;i++){const q=i*r,k=q|0,f=q-k;y[i]=mono[k]*(1-f)+(mono[k+1]||0)*f}mono=y}
-  const len=mono.length;
-  log('Âm thanh dài '+(len/SR).toFixed(1)+' giây, nhận dạng cả bài một lượt');
-  window.PROG=' · đang nhận dạng cả bài';
-  const actx=new AC({sampleRate:SR});
-  const run=seg=>model.transcribeFromAudioArray?model.transcribeFromAudioArray(seg)
-    :(b=>(b.copyToChannel(seg,0),model.transcribeFromAudioBuffer(b)))(actx.createBuffer(1,seg.length,SR));
-  let ns;
-  for(let tries=0;;){
-    try{ns=await run(mono);break}
-    catch(err){
-      if(++tries>2)throw err;
-      log('Nhận dạng lỗi ('+(err.message||err)+'), đang khôi phục rồi thử lại cả bài…','wr');
-      await recover();
-    }
-  }
-  actx.close&&actx.close();mono=null;
-  const notes=ns.notes.map(n=>({pitch:n.pitch,velocity:n.velocity,startTime:n.startTime||0,endTime:n.endTime,instrument:0,program:0,isDrum:false}))
-    .sort((a,b)=>a.startTime-b.startTime);
-  const lastOn={},clean=[];
-  for(const n of notes){
-    if(n.endTime-n.startTime<.06)continue;
-    const l=lastOn[n.pitch];if(l!==undefined&&n.startTime-l<.06)continue;
-    lastOn[n.pitch]=n.startTime;clean.push(n);
-  }
-  log('Lọc nhiễu: bỏ '+(notes.length-clean.length)+' nốt quá ngắn hoặc bị nhận trùng, giữ '+clean.length);
-  window.PROG='';
-  return{notes:clean,totalTime:len/SR,ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
-}
-
-function loadSky(buf){
-  const u=new Uint8Array(buf);let txt;
-  if(u[0]===0xFF&&u[1]===0xFE)txt=new TextDecoder('utf-16le').decode(buf);
-  else if(u[0]===0xFE&&u[1]===0xFF)txt=new TextDecoder('utf-16be').decode(buf);
-  else txt=new TextDecoder('utf-8').decode(buf);
-  let j=JSON.parse(txt.replace(/^\uFEFF/,''));if(Array.isArray(j))j=j[0];
-  if(!j||!j.songNotes)throw new Error('File không phải MIDI, âm thanh hay bản nhạc Sky hợp lệ.');
-  tracks=[];song=j;song._info='Mở từ file Sky có sẵn • BPM '+j.bpm;
-  $('#opts').hidden=false;
-  $('#name').value=j.name||fileName;$('#author').value=j.author||'';$('#by').value=j.transcribedBy||'';
-  $('#tracks').innerHTML='';
-  step(1,'ok','Bỏ qua: đã là file Sky');step(2,'ok','Có thể nghe thử hoặc xuất lại');
-  log('Đã mở bản nhạc Sky: '+j.songNotes.length+' nốt, BPM '+j.bpm,'ok');
-  render();
-}
-['#name','#author','#by'].forEach(s=>$(s).addEventListener('input',()=>{if(!song)return;song.name=$('#name').value;song.author=$('#author').value;song.transcribedBy=$('#by').value;$('#json').value=toJSON()}));
-['#tr','#poly','#bpmfix','#tol','#maxbpm','#sus','#speed','#oct','#acc','#dec'].forEach(s=>$(s).addEventListener('change',()=>{if(tracks.length){log('Đổi tuỳ chọn, quy đổi lại…');convert()}}));
-$('#tracks').addEventListener('change',()=>convert());
-log('Sẵn sàng. Chọn một file để bắt đầu.');
-setTimeout(warmModel,600);
 </script>
 </body>
 </html>
