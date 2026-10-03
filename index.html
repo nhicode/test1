@@ -4,60 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tải MP3 TikTok</title>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
-:root{--text-muted:#94a3b8;--c-primary:#8b5cf6;--c-secondary:#ec4899;--c-accent:#06b6d4;--ok:#10b981;--err:#f43f5e}
-*{box-sizing:border-box}
-body{margin:0;color:#f8fafc;font:14.5px/1.6 "Be Vietnam Pro",system-ui,sans-serif;min-height:100vh;background-color:#090a0f;background-image:radial-gradient(circle at 15% 30%,rgba(139,92,246,.15),transparent 40%),radial-gradient(circle at 85% 70%,rgba(236,72,153,.12),transparent 40%);background-attachment:fixed}
-main{max-width:640px;margin:0 auto;padding:60px 20px}
-h1{font-size:clamp(28px,6vw,44px);line-height:1.15;font-weight:800;margin:0 0 12px;text-align:center}
-.sub{color:var(--text-muted);text-align:center;margin:0 0 30px}
-.card{background:rgba(17,19,31,.65);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:24px}
-input{width:100%;background:rgba(0,0,0,.3);color:#f8fafc;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;font:inherit}
-input:focus-visible{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 4px rgba(6,182,212,.2)}
-.row{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px}
-.btn{flex:1;background:linear-gradient(135deg,var(--c-primary),var(--c-secondary));color:#fff;border:0;border-radius:12px;padding:12px 20px;font:600 14px "Be Vietnam Pro",system-ui,sans-serif;cursor:pointer}
-.btn.sec{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
-.btn:disabled{opacity:.6;cursor:wait}
-#msg{margin-top:16px;color:var(--text-muted);min-height:1.6em;overflow-wrap:anywhere}
-#msg.ok{color:var(--ok)}#msg.err{color:var(--err)}
-#msg a{color:var(--c-accent)}
+body{font:15px/1.6 system-ui,sans-serif;max-width:560px;margin:0 auto;padding:16px;color:#111;background:#fff}
+input{width:100%;padding:8px;font:inherit;box-sizing:border-box}
+button{padding:8px 14px;font:inherit;cursor:pointer}
+#msg{min-height:1.6em;overflow-wrap:anywhere}
+#msg.ok{color:#080}#msg.err{color:#b00}
+#saved{border-top:1px solid #ccc;margin-top:20px;padding-top:12px}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<main>
 <h1>Tải MP3 từ link TikTok</h1>
-<p class="sub">Dán link video, tải xong trang tự chuyển sang Sky Studio để xử lý.</p>
-<form class="card" id="f" autocomplete="off">
+<p>Dán link video. Tải xong trang tự chuyển sang Sky Studio để xử lý.</p>
+<form id="f" autocomplete="off">
   <input id="url" type="url" inputmode="url" required placeholder="https://www.tiktok.com/@user/video/…">
-  <div class="row">
-    <button type="button" class="btn sec" id="paste">Dán link</button>
-    <button type="submit" class="btn" id="go">Tải MP3</button>
-  </div>
+  <p><button type="button" id="paste">Dán link</button> <button type="submit" id="go">Tải MP3</button></p>
   <div id="msg" role="status"></div>
 </form>
-</main>
+<div id="saved" hidden>
+  <p>Bài đang giữ (MIDI): <b id="sn"></b></p>
+  <button type="button" id="open">Mở lại</button> <button type="button" id="del">Xóa</button>
+</div>
 <script>
 const $=s=>document.querySelector(s);
 const API='https://www.tikwm.com/api/';
 const absUrl=u=>!u?'':u.startsWith('//')?'https:'+u:u.startsWith('/')?'https://www.tikwm.com'+u:u;
 const say=(t,c='',html)=>{const m=$('#msg');m.className=c;html?m.innerHTML=t:m.textContent=t};
 
-$('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){say('Trình duyệt không cho đọc clipboard, hãy dán thủ công.','err')}};
+/* IndexedDB dùng chung với app.html: 'pending' = MP3 chờ xử lý, 'midi' = bài đã nhận dạng */
+const DB=()=>new Promise((res,rej)=>{const q=indexedDB.open('sky-handoff',1);q.onupgradeneeded=()=>q.result.createObjectStore('f');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});
+const dbGet=async k=>{const d=await DB();return new Promise(r=>{const g=d.transaction('f').objectStore('f').get(k);g.onsuccess=()=>r(g.result);g.onerror=()=>r()})};
+const dbPut=async(k,v)=>{const d=await DB();return new Promise((res,rej)=>{const t=d.transaction('f','readwrite');t.objectStore('f').put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error)})};
+const dbDel=async(...ks)=>{const d=await DB();return new Promise(res=>{const t=d.transaction('f','readwrite');ks.forEach(k=>t.objectStore('f').delete(k));t.oncomplete=res;t.onerror=res})};
 
-/* Lưu file vào IndexedDB để app.html (cùng trang web) lấy ra */
-function handoff(blob,name){
-  return new Promise((res,rej)=>{
-    const q=indexedDB.open('sky-handoff',1);
-    q.onupgradeneeded=()=>q.result.createObjectStore('f');
-    q.onerror=()=>rej(q.error);
-    q.onsuccess=()=>{
-      const tx=q.result.transaction('f','readwrite');
-      tx.objectStore('f').put({blob,name},'pending');
-      tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
-    };
-  });
+async function showSaved(){
+  try{
+    const m=await dbGet('midi'),p=await dbGet('pending'),x=p||m;
+    $('#saved').hidden=!x;
+    if(x)$('#sn').textContent=x.name+(p?' (MP3 chưa xử lý xong)':'');
+  }catch(e){$('#saved').hidden=true}
 }
+$('#open').onclick=()=>{location.href='app.html'};
+$('#del').onclick=async()=>{await dbDel('pending','midi');showSaved();say('Đã xóa bài đang giữ.')};
+showSaved();
+
+$('#paste').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t)$('#url').value=t.trim()}catch(e){say('Trình duyệt không cho đọc clipboard, hãy dán thủ công.','err')}};
 
 $('#f').addEventListener('submit',async e=>{
   e.preventDefault();
@@ -77,7 +69,7 @@ $('#f').addEventListener('submit',async e=>{
     let blob;
     try{const r=await fetch(mp3);if(!r.ok)throw 0;blob=await r.blob()}
     catch(_){say('Nguồn MP3 không cho tải trực tiếp. <a href="'+mp3+'" target="_blank" rel="noopener">Mở MP3</a> để lưu thủ công, rồi vào <a href="app.html">Sky Studio</a> thả file vào.','err',true);return}
-    await handoff(blob,title+'.mp3');
+    await dbPut('pending',{blob,name:title+'.mp3'});
     say('Tải xong ('+(blob.size/1048576).toFixed(2)+' MB), đang chuyển sang Sky Studio…','ok');
     location.href='app.html';
   }catch(err){
