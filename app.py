@@ -1,7 +1,7 @@
 """Máy chủ nhận dạng nốt piano: nhận NGUYÊN file âm thanh, nhận dạng một lượt (không chia đoạn từ phía trang web).
 Mô hình: ByteDance High-resolution Piano Transcription (độ chính xác cao hơn Onsets and Frames)."""
 import base64, os, tempfile, threading, time, uuid
-import librosa
+import librosa, torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from piano_transcription_inference import PianoTranscription
@@ -17,7 +17,7 @@ jobs = {}
 def get_model():
     global model
     if model is None:
-        model = PianoTranscription(device="cpu")
+        model = PianoTranscription(device="cuda" if torch.cuda.is_available() else "cpu")
     return model
 
 def work(job_id, path):
