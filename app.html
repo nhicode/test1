@@ -75,8 +75,8 @@ textarea{height:120px;font:12px ui-monospace,monospace}
       <select id="poly"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option selected>10</option></select></label>
     <label>Dịch quãng tám
       <select id="oct"><option value="auto">Tự động</option><option>-2</option><option>-1</option><option>0</option><option>1</option><option>2</option></select></label>
-    <label>Nốt thăng/giáng
-      <select id="acc"><option value="follow">Theo giai điệu</option><option value="down">Hạ xuống</option><option value="up">Nâng lên</option></select></label>
+    <label>Nốt không có trong 15 phím
+      <select id="acc"><option value="strict">Loại bỏ (chỉ giữ đúng 15 phím)</option><option value="follow">Theo giai điệu</option><option value="down">Hạ xuống</option><option value="up">Nâng lên</option></select></label>
     <label>Tốc độ (%)<input id="speed" type="number" value="100" min="25" max="300"></label>
     <label><input type="checkbox" id="dec">Cho phép BPM thập phân</label>
   </div>
@@ -287,11 +287,13 @@ async function convert(){
   await frame();if(run!==busy)return;
   try{
   const hist=new Array(128).fill(0);all.forEach(n=>hist[n.n]++);
-  const shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+  const strict=$('#acc').value==='strict',shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
   let bc=Infinity,sh=0,oc=0;
   for(const a of shSel==='auto'?rng(-11,11):[+shSel])for(const o of ocSel==='auto'?rng(-3,3):[+ocSel]){
     const S=a+12*o;let c=0;
-    for(let p=0;p<128;p++)if(hist[p]){const f=foldOct(p+S);c+=hist[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}
+    for(let p=0;p<128;p++)if(hist[p]){
+      if(strict){const m=p+S;c+=hist[p]*(m>=60&&m<=84&&SC.includes(m%12)?0:1)}
+      else{const f=foldOct(p+S);c+=hist[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}}
     c+=.01*Math.abs(a)+.0001*Math.abs(o);
     if(c<bc){bc=c;sh=a;oc=o}
   }
@@ -299,9 +301,14 @@ async function convert(){
   const S=sh+12*oc,mode=$('#acc').value;
   const spd=Math.max(.25,Math.min(3,(+$('#speed').value||100)/100));
   const poly=Math.max(1,+$('#poly').value||10);
-  const pts=all.map(n=>({tick:n.tick,t:t2ms(n.tick)/spd,dur:n.end!=null?(t2ms(n.end)-t2ms(n.tick))/spd:0,m:n.n+S})).sort((a,b)=>a.tick-b.tick);
-  let prev=null;
-  for(const p of pts){const r=mapPitch(p.m,prev,mode);p.key=r.i;p.acc=r.acc;p.fold=r.k;prev=r.i}
+  let pts=all.map(n=>({tick:n.tick,t:t2ms(n.tick)/spd,dur:n.end!=null?(t2ms(n.end)-t2ms(n.tick))/spd:0,m:n.n+S})).sort((a,b)=>a.tick-b.tick);
+  let prev=null,out15=0;
+  if(strict){
+    for(const p of pts){p.ok=p.m>=60&&p.m<=84&&SC.includes(p.m%12);if(p.ok){p.key=keyIdx(p.m);p.acc=false;p.fold=0}else out15++}
+    pts=pts.filter(p=>p.ok);
+    log('Loại '+out15+' nốt không có trong 15 phím, giữ '+pts.length+' nốt','wr');
+    if(!pts.length)throw new Error('Không có nốt nào nằm trong 15 phím Sky. Thử đổi dịch tông hoặc quãng tám.');
+  }else for(const p of pts){const r=mapPitch(p.m,prev,mode);p.key=r.i;p.acc=r.acc;p.fold=r.k;prev=r.i}
 
   const on=[];
   for(const p of pts){const o=on[on.length-1];if(o&&p.t-o.t<=15)o.list.push(p);else on.push({t:p.t,list:[p]})}
@@ -376,9 +383,9 @@ async function convert(){
     if(p.acc)acc++;else if(p.fold)fold++;else exact++;}
   errs.sort((a,b)=>a-b);
   const mean=errs.reduce((a,b)=>a+b,0)/errs.length,mx=errs[errs.length-1];
-  const N=pts.length,pc=x=>(x/N*100).toFixed(1)+'%',cells=Math.max(cLast,...cellKeys.keys())-START+1;
+  const N=all.length,pc=x=>(x/N*100).toFixed(1)+'%',cells=Math.max(cLast,...cellKeys.keys())-START+1;
   const rows=[
-    ['Tổng nốt',N],['BPM game / độ dài 1 ô',bpm+' / '+Lg.toFixed(2)+' ms'],
+    ['Tổng nốt',N],...(strict?[['Nốt bị loại vì không có trong 15 phím',out15+' ('+pc(out15)+')']]:[]),['BPM game / độ dài 1 ô',bpm+' / '+Lg.toFixed(2)+' ms'],
     ['Lệch thời gian TB / tối đa',mean.toFixed(2)+' / '+mx.toFixed(2)+' ms'],
     ['Thời điểm đánh / ô nghỉ',on.length+' / '+Math.max(0,cells-cellKeys.size)],
     ['Đẩy sang ô kế vì trùng ô',pushed],
