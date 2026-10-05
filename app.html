@@ -44,6 +44,8 @@ textarea{height:120px;font:12px ui-monospace,monospace}
   <p>Chọn hoặc kéo file vào đây: MP3, WAV, FLAC, M4A, OGG · MIDI · file Sky .txt/.json</p>
   <label>Nhạc cụ trong file (chọn trước khi tải file)
     <select id="srcinst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label>
+  <label>Lọc nhạc nền, trống, bass (kick)
+    <select id="filt"><option value="mid">Vừa</option><option value="hard">Mạnh</option><option value="off">Tắt</option></select></label>
   <input id="file" type="file" accept=".mp3,.wav,.flac,.m4a,.ogg,.mid,.midi,.txt,.json,.skysheet,audio/*">
 </section>
 
@@ -464,6 +466,103 @@ function showTracks(){
     $('#tracks').appendChild(l);
   });
 }
+/* ---------- Lọc nhạc nền / trống / bass ---------- */
+const FILT={mid:{hp:80,keep:.3,amp:.4,minD:.07},hard:{hp:100,keep:.1,amp:.55,minD:.1}};
+function fft(re,im,inv){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){
+    const a=(inv?2:-2)*Math.PI/len,wr=Math.cos(a),wi=Math.sin(a),h=len>>1;
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;
+      for(let k=0;k<h;k++){
+        const u=i+k,v=u+h,xr=re[v]*cr-im[v]*ci,xi=re[v]*ci+im[v]*cr;
+        re[v]=re[u]-xr;im[v]=im[u]-xi;re[u]+=xr;im[u]+=xi;
+        const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t;
+      }}
+  }
+}
+/* tách thành phần "hòa âm" (đàn) khỏi thành phần "xung" (trống, hi-hat, snare) bằng lọc median trên phổ; giữ lại 'keep' phần xung để không mất tiếng gảy/nhấn phím */
+function hpss(x,keep){
+  const N=1024,H=512,F=N/2+1,T=Math.max(1,Math.ceil((x.length-N)/H)+1),R=8;
+  const w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=Math.sqrt(.5-.5*Math.cos(2*Math.PI*i/N));
+  const Re=new Float32Array(T*F),Im=new Float32Array(T*F),Mg=new Float32Array(T*F),re=new Float32Array(N),im=new Float32Array(N);
+  for(let t=0;t<T;t++){
+    for(let i=0;i<N;i++){const p=t*H+i;re[i]=p<x.length?x[p]*w[i]:0;im[i]=0}
+    fft(re,im,false);
+    for(let k=0;k<F;k++){const q=t*F+k;Re[q]=re[k];Im[q]=im[k];Mg[q]=Math.hypot(re[k],im[k])}
+  }
+  const tmp=new Float32Array(2*R+1);
+  const med=n=>{for(let i=1;i<n;i++){const v=tmp[i];let j=i-1;while(j>=0&&tmp[j]>v){tmp[j+1]=tmp[j];j--}tmp[j+1]=v}return tmp[n>>1]};
+  const Hm=new Float32Array(T*F),Pm=new Float32Array(T*F);
+  for(let k=0;k<F;k++)for(let t=0;t<T;t++){let n=0;for(let d=-R;d<=R;d++){const tt=t+d;if(tt>=0&&tt<T)tmp[n++]=Mg[tt*F+k]}Hm[t*F+k]=med(n)}
+  for(let t=0;t<T;t++)for(let k=0;k<F;k++){let n=0;for(let d=-R;d<=R;d++){const kk=k+d;if(kk>=0&&kk<F)tmp[n++]=Mg[t*F+kk]}Pm[t*F+k]=med(n)}
+  const y=new Float32Array(x.length);
+  for(let t=0;t<T;t++){
+    for(let k=0;k<F;k++){
+      const q=t*F+k,h=Hm[q]*Hm[q],p=Pm[q]*Pm[q],mh=h/(h+p+1e-12),g=mh+keep*(1-mh);
+      re[k]=Re[q]*g;im[k]=Im[q]*g;
+      if(k>0&&k<F-1){re[N-k]=re[k];im[N-k]=-im[k]}
+    }
+    fft(re,im,true);
+    for(let i=0;i<N;i++){const pp=t*H+i;if(pp<y.length)y[pp]+=re[i]/N*w[i]}
+  }
+  return y;
+}
+async function hpssAll(x,keep){
+  const SEG=22050*40,M=2048,out=new Float32Array(x.length);
+  for(let a=0;a<x.length;a+=SEG){
+    const s=Math.max(0,a-M),e=Math.min(x.length,a+SEG+M),y=hpss(x.subarray(s,e),keep),n=Math.min(SEG,x.length-a);
+    out.set(y.subarray(a-s,a-s+n),a);
+    gp=Math.round(Math.min(1,(a+n)/x.length)*100)+'%';await frame();
+  }
+  gp='';return out;
+}
+/* giải mã về 22050 Hz mono, cắt bass/kick (lọc thông cao) và tiếng xì hi-hat (lọc thông thấp) */
+async function decode22k(buf,hp){
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();let ab;
+  try{ab=await new Promise((res,rej)=>ac.decodeAudioData(buf.slice(0),res,rej))}finally{try{ac.close()}catch(e){}}
+  const off=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),src=off.createBufferSource();
+  src.buffer=ab;let n=src;
+  if(hp){
+    const f1=off.createBiquadFilter(),f2=off.createBiquadFilter(),lp=off.createBiquadFilter();
+    f1.type=f2.type='highpass';f1.frequency.value=f2.frequency.value=hp;lp.type='lowpass';lp.frequency.value=5500;
+    n.connect(f1);f1.connect(f2);f2.connect(lp);n=lp;
+  }
+  n.connect(off.destination);src.start();
+  return{data:(await off.startRendering()).getChannelData(0),dur:ab.duration};
+}
+async function cleanAudio(buf,lv){
+  const c=FILT[lv];
+  const r=await decode22k(buf,c?c.hp:0);
+  if(c){log('Lọc trống/hi-hat khỏi âm thanh (mức '+(lv==='hard'?'mạnh':'vừa')+')…');r.data=await hpssAll(r.data,c.keep)}
+  return r;
+}
+function wav16(x,sr){
+  const b=new ArrayBuffer(44+x.length*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+x.length*2,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,x.length*2,true);
+  for(let i=0;i<x.length;i++)v.setInt16(44+i*2,Math.max(-1,Math.min(1,x[i]))*32767,true);
+  return new Blob([b],{type:'audio/wav'});
+}
+/* lọc ở mức nốt: bỏ nốt ngoài tầm đàn (bass/kick), nốt quá ngắn hoặc quá nhỏ, cụm nốt dồn dập trải rộng (trống/nhiễu) */
+function cleanNotes(a,kind,lv){
+  const c=FILT[lv];if(!c)return a;
+  const g6=kind==='guitar',lo=g6?40:36,hi=g6?88:100,mp=g6?6:10;
+  a=a.filter(n=>n.p>=lo&&n.p<=hi&&n.e-n.s>=c.minD&&(n.p>=48||n.e-n.s>=.15));
+  const md=a.map(n=>n.v).sort((x,y)=>x-y)[a.length>>1]||0;
+  a=a.filter(n=>n.v>=c.amp*md||n.e-n.s>=.3).sort((x,y)=>x.s-y.s);
+  a=a.filter(n=>!a.some(m=>m!==n&&m.p-n.p===12&&Math.abs(m.s-n.s)<.08&&n.v<.7*m.v)); /* tiếng bass/sub thấp hơn 1 quãng tám, yếu hơn nốt chính */
+  const out=[];
+  for(let i=0;i<a.length;){
+    let j=i;while(j<a.length&&a[j].s-a[i].s<=.04)j++;
+    const g=a.slice(i,j);i=j;
+    const ps=g.map(n=>n.p),span=Math.max(...ps)-Math.min(...ps),avg=g.reduce((t,n)=>t+n.e-n.s,0)/g.length;
+    if(g.length>mp&&span>=20&&avg<.3)continue;
+    g.sort((x,y)=>y.v-x.v);out.push(...g.slice(0,mp));
+  }
+  return out.map(n=>({...n,e:Math.min(n.e,n.s+8)})).sort((x,y)=>x.s-y.s);
+}
+
 /* ---------- Nhận dạng guitar: TensorFlow.js 3.21.0 + Basic Pitch 1.0.1 ---------- */
 const TFURL='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
 const BPMODEL='https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json';
@@ -481,33 +580,36 @@ function guitarNotes(raw){
   const out=[],last={};
   for(const n of a){
     const s=n.startTimeSeconds,e=s+n.durationSeconds,l=last[n.pitchMidi];
-    if(l&&s<=l.end+.06){l.end=Math.max(l.end,e);continue}
-    const o={s,end:e,p:n.pitchMidi};out.push(o);last[n.pitchMidi]=o;
+    if(l&&s<=l.end+.06){l.end=Math.max(l.end,e);l.a=Math.max(l.a,n.amplitude);continue}
+    const o={s,end:e,p:n.pitchMidi,a:n.amplitude};out.push(o);last[n.pitchMidi]=o;
   }
   const H=[12,19,24,28,31,36];
   return out.filter(n=>!out.some(m=>m!==n&&Math.abs(m.s-n.s)<.08&&H.includes(n.p-m.p)&&m.end-m.s>=n.end-n.s));
 }
-async function transcribeGuitar(buf){
+async function transcribeGuitar(buf,lv){
   log('Tải thư viện nhận dạng guitar (TensorFlow.js + Basic Pitch)…');
   await ensureBP();
   log('Giải mã và đổi âm thanh về 22050 Hz mono…');
-  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();
-  let ab;
-  try{ab=await new Promise((res,rej)=>ac.decodeAudioData(buf.slice(0),res,rej))}finally{try{ac.close()}catch(e){}}
-  const off=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),src=off.createBufferSource();
-  src.buffer=ab;src.connect(off.destination);src.start();
-  const data=(await off.startRendering()).getChannelData(0);
-  log('Nhận dạng nốt guitar ('+ab.duration.toFixed(1)+' giây). Bước này có thể mất vài phút…');
+  const r=await cleanAudio(buf,lv);
+  log('Nhận dạng nốt guitar ('+r.dur.toFixed(1)+' giây). Bước này có thể mất vài phút…');
   const bp=new BP.BasicPitch(BPMODEL),fr=[],on=[];
-  await bp.evaluateModel(data,(f,o)=>{fr.push(...f);on.push(...o)},p=>{gp=Math.round(p*100)+'%'});
+  await bp.evaluateModel(r.data,(f,o)=>{fr.push(...f);on.push(...o)},p=>{gp=Math.round(p*100)+'%'});
   gp='';
   const g=guitarNotes(BP.noteFramesToTime(BP.outputToNotesPoly(fr,on,.3,.3,9,true,1100,80,true,11)));
-  return{notes:g.map(n=>({pitch:n.p,startTime:n.s,endTime:n.end,velocity:80})),totalTime:Math.max(0,...g.map(n=>n.end)),ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
+  return{notes:g.map(n=>({pitch:n.p,startTime:n.s,endTime:n.end,velocity:Math.max(1,Math.round((n.a||.5)*127))}))};
+}
+/* dựng lại NoteSequence sau khi lọc (có controlChanges để Magenta ghi được MIDI) */
+function finishSeq(ns,kind,lv){
+  const arr=ns.notes.map(n=>({p:n.pitch,s:n.startTime||0,e:n.endTime,v:(n.velocity||80)/127}));
+  const kept=cleanNotes(arr,kind,lv);
+  if(arr.length!==kept.length)log('Đã loại '+(arr.length-kept.length)+'/'+arr.length+' nốt không thuộc '+kind+' (bass, kick, trống, nhiễu)','ok');
+  const notes=kept.map(n=>({pitch:n.p,startTime:n.s,endTime:n.e,velocity:Math.max(1,Math.round(n.v*127)),instrument:0,program:kind==='guitar'?25:0}));
+  return{notes,controlChanges:[],totalTime:Math.max(0,...notes.map(n=>n.endTime)),ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
 }
 
-async function load(f,inst){
+async function load(f,inst,filt){
   if(!f)return;stop();song=null;midiBytes=null;render();
-  inst=inst||$('#srcinst').value;$('#srcinst').value=inst;document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
+  inst=inst||$('#srcinst').value;$('#srcinst').value=inst;filt=filt||$('#filt').value;$('#filt').value=filt;document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
   T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
   [0,1,2].forEach(i=>step(i,'idle','Chờ…'));
   fileName=f.name.replace(/\.[^.]+$/,'');
@@ -527,13 +629,16 @@ async function load(f,inst){
       step(0,'run','Đang chuẩn bị…');
       if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
       try{await dbDel('midi')}catch(e){} /* tải bài mới thì xóa bài cũ */
-      const isG=inst==='guitar';let ns;
-      if(isG)ns=await transcribeGuitar(buf);
+      const isG=inst==='guitar',kind=isG?'guitar':'piano';let ns;
+      if(isG)ns=await transcribeGuitar(buf,filt);
       else{
         if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
+        let src=f;
+        if(FILT[filt]){log('Giải mã và lọc âm thanh trước khi nhận dạng…');const r=await cleanAudio(buf,filt);src=wav16(r.data,22050)}
         log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
-        ns=await model.transcribeFromAudioFile(f);
+        ns=await model.transcribeFromAudioFile(src);
       }
+      if(isG||FILT[filt])ns=finishSeq(ns,kind,filt);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt '+(isG?'guitar':'piano')+' nào trong file.');
       buf=null; /* bỏ dữ liệu âm thanh gốc, chỉ giữ nốt piano */
       midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
@@ -582,7 +687,7 @@ if(window.Tone)loadInst(pinst());else log('Không tải được Tone.js (cần 
 (async()=>{
   try{
     const p=await dbGet('pending');
-    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}),p.inst)}
+    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}),p.inst,p.filt)}
     const m=await dbGet('midi');
     if(m&&m.blob){log('Mở lại MIDI đang giữ: '+m.name);load(new File([m.blob],m.name+'.mid',{type:'audio/midi'}),m.inst)}
   }catch(e){log('Không đọc được dữ liệu lưu tạm: '+(e.message||e),'err')}
