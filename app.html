@@ -38,9 +38,7 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 #dz{display:block;border:2px dashed #4b5563;background:#0b0c10;padding:28px 12px;margin:12px 0 4px;text-align:center;cursor:pointer;color:#e5e7eb;font-size:15px}
 #dz b{display:block;font-size:17px;margin-bottom:4px}#dz span{display:block;color:#9ca3af;font-size:13px;margin-bottom:10px}#dz u{color:#06b6d4}
 #drop.on #dz{border-color:#06b6d4;background:#0f1a22}
-#pipe{margin:4px 0 12px;padding-left:22px;font-size:14px}#pipe li{color:#64748b}#pipe li b{font-weight:600}
-#pipe li[data-st=run]{color:#fbbf24}#pipe li[data-st=ok]{color:#34d399}#pipe li[data-st=err]{color:#f87171}
-#stemAudio{display:block;width:100%;margin-top:8px}
+#steps li{margin:3px 0}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -51,32 +49,25 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 <section id="drop">
   <label>Nhạc cụ trong file (chọn trước khi tải file)
     <select id="srcinst"><option value="piano">Piano</option><option value="guitar">Guitar</option></select></label>
-  <label>Lọc nhạc nền, trống, bass (kick)
-    <select id="filt"><option value="hard">mạnh</option><option value="hard">Mạnh</option><option value="off">Tắt</option></select></label>
-  <label>Tách nguồn nhạc cụ (Music Source Separation)
-    <select id="sep"><option value="on">Bật (tách harmonic / trống, giữ stem nhạc cụ)</option><option value="off">Tắt (chỉ lọc dải tần)</option></select></label>
-  <label>Giảm giọng hát nằm giữa (chỉ có tác dụng với nhạc stereo)
-    <select id="vr"><option value="hard">mạnh</option><option value="mid">Vừa</option><option value="hard">Mạnh</option></select></label>
-  <label>Giảm nhiễu nhẹ trên stem
-    <select id="nr"><option value="mid">vừa</option><option value="mid">Vừa</option><option value="off">Tắt</option></select></label>
-  <label><input type="checkbox" id="keepstem">Giữ stem để nghe thử / tải về (tốn thêm một ít RAM)</label>
+  <label>Tách nguồn bằng AI (Demucs): loại giọng hát, trống, bass, giữ lại stem nhạc cụ
+    <select id="sep"><option value="ai">Bật (tải mô hình ~172 MB lần đầu, lưu lại cho lần sau)</option><option value="off">Tắt (chỉ dùng bộ lọc nhanh HPSS như trước)</option></select></label>
+  <label>Lọc nhạc nền, trống, bass (kick), nhiễu nhẹ
+    <select id="filt"><option value="mid">Vừa</option><option value="hard">Mạnh</option><option value="off">Tắt</option></select></label>
   <label id="dz" for="file"><b>Chọn hoặc kéo file vào đây</b><span>MP3, MP4, WAV, FLAC, M4A, OGG · MIDI · file Sky .txt/.json</span><u>Bấm để chọn file</u></label>
   <input id="file" type="file" hidden>
 </section>
 
 <section>
   <h2>Tiến trình</h2>
-  <div id="pipew" hidden>
-    <h3>Chuỗi xử lý âm thanh</h3>
-    <ol id="pipe"></ol>
-  </div>
   <ol id="steps">
-    <li id="s0" data-st="idle"><b>Nhận dạng nốt:</b> <span>Chờ file</span></li>
-    <li id="s1" data-st="idle"><b>Quy đổi sang 15 phím:</b> <span>Chờ file</span></li>
-    <li id="s2" data-st="idle"><b>Sẵn sàng xuất:</b> <span>Chờ file</span></li>
+    <li id="s0" data-st="idle"><b>Giải mã âm thanh (MP3/MP4) và dọn RAM:</b> <span>Chờ file</span></li>
+    <li id="s1" data-st="idle"><b>Tách nguồn nhạc cụ (Music Source Separation):</b> <span>Chờ file</span></li>
+    <li id="s2" data-st="idle"><b>Lọc nhiễu nhẹ:</b> <span>Chờ file</span></li>
+    <li id="s3" data-st="idle"><b>Nhận dạng nốt → MIDI:</b> <span>Chờ file</span></li>
+    <li id="s4" data-st="idle"><b>Quy đổi sang 15 phím Sky:</b> <span>Chờ file</span></li>
+    <li id="s5" data-st="idle"><b>Sẵn sàng xuất:</b> <span>Chờ file</span></li>
   </ol>
-  <button id="bMid" hidden>Tải MIDI</button> <button id="bPro" hidden>⚙ Chuyển MIDI chính xác</button> <button id="bStem" hidden>Tải stem (.wav)</button>
-  <audio id="stemAudio" controls hidden></audio>
+  <button id="bMid" hidden>Tải MIDI</button> <button id="bPro" hidden>⚙ Chuyển MIDI chính xác</button>
   <div id="log" role="log" aria-live="polite"></div>
 </section>
 
@@ -156,7 +147,7 @@ textarea{height:120px;font:12px ui-monospace,monospace}
 const $=s=>document.querySelector(s);
 const SC=[0,2,4,5,7,9,11];
 const CKPT='https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
-let tracks=[],tempos=[],division=480,song=null,fileName='bai-nhac',model=null,midiBytes=null,T0=performance.now(),busy=0;
+let tracks=[],tempos=[],division=480,song=null,fileName='bai-nhac',model=null,midiBytes=null,T0=performance.now(),busy=0,gp='';
 
 /* ---------- Lưu trữ tạm (IndexedDB dùng chung với index.html) ----------
    'pending' = MP3 chờ xử lý, 'midi' = bài đã nhận dạng. Nhận dạng xong thì xóa MP3, chỉ giữ MIDI. */
@@ -173,8 +164,17 @@ function log(msg,cls=''){
   d.innerHTML='<time>'+String(Math.floor(s/60)).padStart(2,'0')+':'+(s%60).toFixed(1).padStart(4,'0')+'</time><span></span>';
   d.lastChild.textContent=msg;L.appendChild(d);L.scrollTop=L.scrollHeight;
 }
-function step(i,st,txt){const e=$('#s'+i);e.dataset.st=st;if(txt!=null)e.querySelector('span').textContent=({ok:'✔ ',err:'✖ ',run:'… '}[st]||'')+txt}
+/* 6 bước: 0 giải mã · 1 tách nguồn · 2 lọc nhiễu · 3 nhận dạng nốt/MIDI · 4 quy đổi Sky · 5 sẵn sàng xuất */
+function step(i,st,txt){const e=$('#s'+i);e.dataset.st=st;if(txt!=null){if(st==='run')e.dataset.base=txt;e.querySelector('span').textContent=({ok:'✔ ',err:'✖ ',run:'… '}[st]||'')+txt}}
 const frame=()=>new Promise(r=>setTimeout(r,30));
+/* JavaScript không ép được trình duyệt thu gom rác; ở đây chỉ bỏ hết tham chiếu, nhường luồng cho trình duyệt dọn rồi ghi lại mức RAM JS (nếu trình duyệt cho đọc) */
+async function freeMem(why){
+  await frame();await frame();
+  if(window.gc){try{window.gc()}catch(e){}}
+  let m='';
+  try{const pm=performance.memory;if(pm)m=' · RAM JS đang dùng ~'+Math.round(pm.usedJSHeapSize/1048576)+' MB'}catch(e){}
+  log('Đã dọn dữ liệu tạm sau '+why+m,'ok');
+}
 
 /* ---------- Âm thanh: Tone.js 15.1.22 ---------- */
 const SAL='https://tonejs.github.io/audio/salamander/';
@@ -324,7 +324,7 @@ async function convert(){
   const run=++busy,all=[];
   tracks.forEach((t,i)=>{if($('#t'+i).checked)all.push(...t.notes)});
   if(!all.length){song=null;render();return}
-  step(1,'run','Đang quy đổi…');log('Bắt đầu quy đổi '+all.length+' nốt sang 15 phím Sky');
+  step(4,'run','Đang quy đổi…');log('Bắt đầu quy đổi '+all.length+' nốt sang 15 phím Sky');
   await frame();if(run!==busy)return;
   try{
   const hist=new Array(128).fill(0);all.forEach(n=>hist[n.n]++);
@@ -434,11 +434,11 @@ async function convert(){
     isComposed:true,bpm,bitsPerPage:16,pitchLevel:0,isEncrypted:false,songNotes:notes};
   song._info='BPM '+bpm+' • dịch '+(sh>0?'+':'')+sh+' nửa cung, '+(oc>0?'+':'')+oc+' quãng tám';
   song._rep='<b>Báo cáo độ chính xác</b><br>'+rows.map(r=>r[0]+': <b>'+r[1]+'</b>').join('<br>');
-  step(1,'ok','BPM '+bpm+' · '+notes.length+' nốt Sky');
-  step(2,'ok','Có thể tải .txt hoặc .json');
+  step(4,'ok','BPM '+bpm+' · '+notes.length+' nốt Sky');
+  step(5,'ok','Có thể tải .txt hoặc .json');
   log('Hoàn tất: '+notes.length+' nốt Sky, sẵn sàng tải về','ok');
   render();
-  }catch(e){step(1,'err','Lỗi');log('Lỗi quy đổi: '+(e.message||e),'err')}
+  }catch(e){step(4,'err','Lỗi');log('Lỗi quy đổi: '+(e.message||e),'err')}
 }
 
 /* ---------- Piano roll ---------- */
@@ -779,16 +779,16 @@ async function proConvert(){
     if(!sel.size)throw new Error('Chưa chọn track nào.');
     const mode=$('#pmode').value,tim=$('#ptim').value,poly=+$('#ppoly').value||10;
     const ck=[RAWid,[...sel].join(),mode,tim,poly,['#tr','#oct','#acc','#bpmfix','#tol','#maxbpm','#sus','#speed'].map(s=>$(s).value).join(),$('#dec').checked].join('|');
-    step(1,'run','Đang chuyển MIDI chính xác…');
+    step(4,'run','Đang chuyển MIDI chính xác…');
     let res=proCache.get(ck);
     if(res)log('Dùng lại kết quả đã tính (dữ liệu và tùy chọn không đổi)');
     else{log('Chuyển MIDI chính xác: '+mode.toUpperCase()+' · '+tim+' · polyphony '+poly+' (không dùng bộ lọc âm thanh)');await frame();res=await proCompute(sel,mode,tim,poly);proCache.set(ck,res)}
     song={name:$('#name').value,author:$('#author').value,transcribedBy:$('#by').value,...res.song};
     PLOG=res.plog;$('#pval').innerHTML=res.val;$('#bProCsv').hidden=false;
-    step(1,'ok','PRO · BPM '+song.bpm+' · '+res.nKept+' nốt Sky');step(2,'ok','Có thể tải .txt hoặc .json');
+    step(4,'ok','PRO · BPM '+song.bpm+' · '+res.nKept+' nốt Sky');step(5,'ok','Có thể tải .txt hoặc .json');
     res.warn.forEach(w=>log('⚠ '+w,'wr'));log('Hoàn tất chuyển MIDI chính xác: '+song.songNotes.length+' nốt Sky','ok');
     render();
-  }catch(e){step(1,'err','Lỗi');log('Lỗi chuyển MIDI chính xác: '+(e.message||e),'err')}
+  }catch(e){step(4,'err','Lỗi');log('Lỗi chuyển MIDI chính xác: '+(e.message||e),'err')}
   finally{go.disabled=false}
 }
 $('#bProGo').onclick=proConvert;
@@ -820,8 +820,10 @@ function showTracks(){
     $('#tracks').appendChild(l);
   });
 }
-/* ---------- Lọc nhạc nền / trống / bass ---------- */
-const FILT={mid:{hp:80,keep:.3,amp:.4,minD:.07},hard:{hp:100,keep:.1,amp:.55,minD:.1}};
+/* ---------- Lọc nhạc nền / trống / bass ----------
+   hp = tần số cắt thấp (Hz); keep = phần "xung" giữ lại khi HPSS; amp/minD = lọc ở mức nốt;
+   dn = lọc nhiễu nhẹ sau tách nguồn: al = độ mạnh trừ phổ, fl = mức sàn của hệ số khuếch đại */
+const FILT={mid:{hp:80,keep:.3,amp:.4,minD:.07,dn:{al:.9,fl:.35}},hard:{hp:100,keep:.1,amp:.55,minD:.1,dn:{al:1.4,fl:.2}}};
 function fft(re,im,inv){
   const n=re.length;
   for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
@@ -862,19 +864,53 @@ function hpss(x,keep){
   }
   return y;
 }
-async function hpssAll(x,keep){
+/* lọc nhiễu nhẹ: ước lượng sàn nhiễu từng dải tần (phân vị 15% theo thời gian) rồi trừ phổ có sàn khuếch đại, tránh làm méo tiếng đàn */
+function denoise(x,cfg){
+  const N=1024,H=512,F=N/2+1,T=Math.max(1,Math.ceil((x.length-N)/H)+1);
+  const w=new Float32Array(N);for(let i=0;i<N;i++)w[i]=Math.sqrt(.5-.5*Math.cos(2*Math.PI*i/N));
+  const Re=new Float32Array(T*F),Im=new Float32Array(T*F),Mg=new Float32Array(T*F),re=new Float32Array(N),im=new Float32Array(N);
+  for(let t=0;t<T;t++){
+    for(let i=0;i<N;i++){const p=t*H+i;re[i]=p<x.length?x[p]*w[i]:0;im[i]=0}
+    fft(re,im,false);
+    for(let k=0;k<F;k++){const q=t*F+k;Re[q]=re[k];Im[q]=im[k];Mg[q]=Math.hypot(re[k],im[k])}
+  }
+  const nf=new Float32Array(F),col=new Float32Array(T),ix=Math.floor(T*.15);
+  for(let k=0;k<F;k++){for(let t=0;t<T;t++)col[t]=Mg[t*F+k];col.sort();nf[k]=col[ix]}
+  const y=new Float32Array(x.length);
+  for(let t=0;t<T;t++){
+    for(let k=0;k<F;k++){
+      const q=t*F+k,g=Math.max(cfg.fl,1-cfg.al*nf[k]/(Mg[q]+1e-9));
+      re[k]=Re[q]*g;im[k]=Im[q]*g;
+      if(k>0&&k<F-1){re[N-k]=re[k];im[N-k]=-im[k]}
+    }
+    fft(re,im,true);
+    for(let i=0;i<N;i++){const pp=t*H+i;if(pp<y.length)y[pp]+=re[i]/N*w[i]}
+  }
+  return y;
+}
+/* chạy một hàm xử lý phổ theo từng đoạn 40 giây (có đệm 2048 mẫu) để không tốn nhiều RAM */
+async function segProc(x,fn){
   const SEG=22050*40,M=2048,out=new Float32Array(x.length);
   for(let a=0;a<x.length;a+=SEG){
-    const s=Math.max(0,a-M),e=Math.min(x.length,a+SEG+M),y=hpss(x.subarray(s,e),keep),n=Math.min(SEG,x.length-a);
+    const s=Math.max(0,a-M),e=Math.min(x.length,a+SEG+M),y=fn(x.subarray(s,e)),n=Math.min(SEG,x.length-a);
     out.set(y.subarray(a-s,a-s+n),a);
     gp=Math.round(Math.min(1,(a+n)/x.length)*100)+'%';await frame();
   }
   gp='';return out;
 }
+const hpssAll=(x,keep)=>segProc(x,s=>hpss(s,keep));
+const denoiseAll=(x,cfg)=>segProc(x,s=>denoise(s,cfg));
+
+/* ---------- Giải mã âm thanh (MP3/MP4/WAV/FLAC/M4A/OGG) ----------
+   Các hàm giải mã nhận trực tiếp ArrayBuffer (không sao chép) để trình duyệt giải phóng file nén ngay sau khi giải mã. */
+const decodeAB=(ac,buf)=>new Promise((res,rej)=>{
+  const bad=e=>rej(new Error('Trình duyệt không giải mã được âm thanh của file này ('+((e&&e.message)||e||'lỗi không rõ')+'). Với MP4/video, hãy thử xuất âm thanh ra MP3 hoặc M4A.'));
+  try{const p=ac.decodeAudioData(buf,res,bad);if(p&&p.catch)p.catch(bad)}catch(e){bad(e)}
+});
 /* giải mã về 22050 Hz mono, cắt bass/kick (lọc thông cao) và tiếng xì hi-hat (lọc thông thấp) */
 async function decode22k(buf,hp){
   const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();let ab;
-  try{ab=await new Promise((res,rej)=>ac.decodeAudioData(buf.slice(0),res,rej))}finally{try{ac.close()}catch(e){}}
+  try{ab=await decodeAB(ac,buf)}finally{try{ac.close()}catch(e){}}
   const off=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),src=off.createBufferSource();
   src.buffer=ab;let n=src;
   if(hp){
@@ -885,11 +921,182 @@ async function decode22k(buf,hp){
   n.connect(off.destination);src.start();
   return{data:(await off.startRendering()).getChannelData(0),dur:ab.duration};
 }
-async function cleanAudio(buf,lv){
-  const c=FILT[lv];
-  const r=await decode22k(buf,c?c.hp:0);
-  if(c){log('Lọc trống/hi-hat khỏi âm thanh (mức '+(lv==='hard'?'mạnh':'vừa')+')…');r.data=await hpssAll(r.data,c.keep)}
-  return r;
+/* giải mã về 44100 Hz stereo (đầu vào của mô hình tách nguồn) */
+function resampleLin(x,from,to){
+  const n=Math.floor(x.length*to/from),y=new Float32Array(n),r=from/to;
+  for(let i=0;i<n;i++){const s=i*r,a=Math.floor(s),b=Math.min(a+1,x.length-1),f=s-a;y[i]=x[a]*(1-f)+x[b]*f}
+  return y;
+}
+async function decode44(buf){
+  const AC=window.AudioContext||window.webkitAudioContext;let ac;
+  try{ac=new AC({sampleRate:44100})}catch(e){ac=new AC()}
+  let ab;
+  try{ab=await decodeAB(ac,buf)}finally{try{ac.close()}catch(e){}}
+  let L=ab.getChannelData(0),R=ab.numberOfChannels>1?ab.getChannelData(1):L;
+  if(ab.sampleRate!==44100){
+    log('Đổi tần số lấy mẫu '+ab.sampleRate+' Hz → 44100 Hz');
+    const rs=R===L;L=resampleLin(L,ab.sampleRate,44100);R=rs?L:resampleLin(R,ab.sampleRate,44100);
+  }
+  return{L,R,dur:ab.duration};
+}
+/* 44100 → 22050 Hz mono, lọc thông thấp nhẹ [1 3 3 1]/8 để giảm méo răng cưa */
+function half(m){
+  const L=m.length,n=L>>1,y=new Float32Array(n);
+  for(let i=0;i<n;i++){const j=2*i;y[i]=(m[j>0?j-1:0]+3*m[j]+3*m[j+1]+m[j+2<L?j+2:L-1])/8}
+  return y;
+}
+const midOf=d=>{if(d.L===d.R)return d.L;const m=new Float32Array(d.L.length);for(let i=0;i<m.length;i++)m[i]=(d.L[i]+d.R[i])*.5;return m};
+function normalize(x){
+  let m=0;for(let i=0;i<x.length;i++){const a=Math.abs(x[i]);if(a>m)m=a}
+  if(m<1e-6)return x;
+  const g=Math.min(10,.9/m);
+  if(g>1.02||g<.98)for(let i=0;i<x.length;i++)x[i]*=g;
+  return x;
+}
+/* lọc dải 22050 Hz mono: thông cao 2 tầng + thông thấp 5500 Hz (giống bước giải mã cũ) */
+async function filterBand(x,hp){
+  const off=new OfflineAudioContext(1,x.length,22050),b=off.createBuffer(1,x.length,22050);
+  b.copyToChannel(x,0);
+  const src=off.createBufferSource();src.buffer=b;
+  const f1=off.createBiquadFilter(),f2=off.createBiquadFilter(),lp=off.createBiquadFilter();
+  f1.type=f2.type='highpass';f1.frequency.value=f2.frequency.value=hp;lp.type='lowpass';lp.frequency.value=5500;
+  src.connect(f1);f1.connect(f2);f2.connect(lp);lp.connect(off.destination);src.start();
+  return(await off.startRendering()).getChannelData(0);
+}
+
+/* ---------- Tách nguồn bằng AI: Demucs (htdemucs) chạy trong trình duyệt bằng ONNX Runtime Web ----------
+   htdemucs có 4 stem: drums, bass, other, vocals. Piano/guitar nằm trong stem "other", nên lấy stem này làm nhạc cụ.
+   Xử lý theo từng đoạn 40 giây (chồng 2 giây, hòa mờ) để RAM không phình theo độ dài bài. */
+const ORTJS='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.all.mjs';
+const DMJS='https://cdn.jsdelivr.net/npm/demucs-web@1.0.2/src/index.js';
+const DMMODEL='https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
+const DMKEY='https://sky-studio.local/demucs/htdemucs_embedded.onnx';
+let DMLIB=null;
+async function ensureDemucs(){
+  if(DMLIB)return DMLIB;
+  log('Tải bộ chạy AI (ONNX Runtime Web + demucs-web)…');
+  const [ort,dm]=await Promise.all([import(ORTJS),import(DMJS)]);
+  if(!dm.DemucsProcessor)throw new Error('Không nạp được thư viện demucs-web.');
+  return DMLIB={ort,DemucsProcessor:dm.DemucsProcessor};
+}
+/* mô hình ~172 MB: lưu vào Cache Storage của trình duyệt để lần sau không phải tải lại */
+async function demucsModel(){
+  let cache=null;
+  try{if(typeof caches!=='undefined')cache=await caches.open('sky-demucs-v1')}catch(e){}
+  if(cache){
+    try{const hit=await cache.match(DMKEY);if(hit){log('Dùng mô hình Demucs đã lưu trên máy','ok');return await hit.arrayBuffer()}}catch(e){}
+  }
+  log('Tải mô hình Demucs (~172 MB, chỉ lần đầu)…');
+  const r=await fetch(DMMODEL);
+  if(!r.ok)throw new Error('Tải mô hình thất bại (HTTP '+r.status+')');
+  const total=+r.headers.get('Content-Length')||0,rd=r.body.getReader();
+  let out=total?new Uint8Array(total):null;const parts=out?null:[];let got=0,lp=-1;
+  for(;;){
+    const {done,value}=await rd.read();if(done)break;
+    if(out){
+      if(got+value.length>out.length){const bg=new Uint8Array(Math.ceil(Math.max(out.length*1.2,got+value.length)));bg.set(out.subarray(0,got));out=bg}
+      out.set(value,got);
+    }else parts.push(value);
+    got+=value.length;
+    const pc=total?Math.floor(got/total*100):Math.floor(got/1048576);
+    if(pc!==lp){lp=pc;gp='tải mô hình '+(total?pc+'%':pc+' MB')}
+  }
+  gp='';
+  let ab;
+  if(out)ab=got===out.length?out.buffer:out.slice(0,got).buffer;
+  else{const u=new Uint8Array(got);let o=0;for(const p of parts){u.set(p,o);o+=p.length}ab=u.buffer}
+  log('Đã tải mô hình ('+(got/1048576).toFixed(0)+' MB)','ok');
+  if(cache){try{await cache.put(DMKEY,new Response(ab,{headers:{'Content-Type':'application/octet-stream'}}));log('Đã lưu mô hình để lần sau không phải tải lại','ok')}catch(e){log('Không lưu được mô hình vào bộ nhớ trình duyệt ('+(e.message||e)+')','wr')}}
+  return ab;
+}
+/* cắt bài thành các đoạn chồng nhau, chạy tách nguồn từng đoạn (run trả về {left,right} của stem cần lấy),
+   hạ xuống 22050 Hz mono và ghép lại bằng hòa mờ tuyến tính ở vùng chồng */
+async function chunkedOther(dec,run,done){
+  const N=dec.L.length,CH=44100*40,OV=44100*2,STEP=CH-OV,ovh=OV>>1;
+  const nc=Math.max(1,Math.ceil((N-OV)/STEP)),out=new Float32Array(N>>1);
+  for(let k=0,s=0;s<N;k++,s+=STEP){
+    const e=Math.min(N,s+CH),last=e>=N;
+    const r=await run(dec.L.subarray(s,e),dec.R.subarray(s,e),k,nc);
+    const len=e-s,mid=new Float32Array(len);
+    for(let i=0;i<len;i++)mid[i]=(r.left[i]+r.right[i])*.5;
+    const y=half(mid),base=s>>1;
+    for(let i=0;i<y.length&&base+i<out.length;i++){
+      let w=1;
+      if(k>0&&i<ovh)w=i/ovh;
+      if(!last&&i>=y.length-ovh)w=Math.min(w,(y.length-i)/ovh);
+      out[base+i]+=y[i]*w;
+    }
+    if(done)await done(k,nc);
+    await frame();
+    if(last)break;
+  }
+  return out;
+}
+async function demucsOther(dec){
+  const {ort,DemucsProcessor}=await ensureDemucs();
+  let gpu=false;
+  try{if(navigator.gpu&&await navigator.gpu.requestAdapter()){gpu=true;ort.env.webgpu=ort.env.webgpu||{};ort.env.webgpu.powerPreference='high-performance'}}catch(e){}
+  const th=self.crossOriginIsolated?Math.max(1,Math.min(4,navigator.hardwareConcurrency||2)):1;
+  ort.env.wasm.numThreads=th;
+  log('Bộ chạy AI: '+(gpu?'WebGPU':'WebAssembly, '+th+' luồng (chậm hơn nhiều so với GPU, bài dài có thể mất khá lâu)'),gpu?'ok':'wr');
+  const so={enableCpuMemArena:false,enableMemPattern:false,executionProviders:gpu?['webgpu','wasm']:['wasm']};
+  let K=0,NC=1;
+  const proc=new DemucsProcessor({ort,sessionOptions:so,onProgress:p=>{gp='tách nguồn '+Math.min(99,Math.round((K+p.progress)/NC*100))+'%'}});
+  try{
+    let mb=await demucsModel();
+    log('Nạp mô hình vào bộ nhớ…');
+    await proc.loadModel(mb);mb=null;
+    await freeMem('nạp mô hình');
+    const t0=performance.now();
+    const out=await chunkedOther(dec,async(l,r,k,nc)=>{K=k;NC=nc;return(await proc.separate(l,r)).other},async(k,nc)=>{
+      const el=(performance.now()-t0)/1000,eta=el/(k+1)*(nc-k-1);
+      log('Tách nguồn: đoạn '+(k+1)+'/'+nc+(k+1<nc?' · còn khoảng '+fmtT(eta):''));
+    });
+    return normalize(out);
+  }finally{
+    try{if(proc.session)await proc.session.release()}catch(e){}
+    proc.session=null;gp='';
+  }
+}
+
+/* ---------- Nhận dạng guitar: TensorFlow.js 3.21.0 + Basic Pitch 1.0.1 ---------- */
+const TFURL='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
+const BPMODEL='https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json';
+const loadScript=u=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=u;e.onload=res;e.onerror=()=>rej(new Error('Không tải được '+u));document.head.appendChild(e)});
+async function ensureBP(){
+  if(window.BP)return;
+  if(!window.tf||!window.tf.version||!/^3\./.test(window.tf.version.tfjs||''))await loadScript(TFURL);
+  const e=document.createElement('script');e.text=$('#bpsrc').textContent;document.head.appendChild(e);
+  if(!window.BP)throw new Error('Không khởi tạo được bộ nhận dạng guitar.');
+}
+/* gộp nốt cùng cao độ bị cắt khúc, bỏ họa âm (quãng 8/12/19...) và nốt ngoài tầm đàn guitar */
+function guitarNotes(raw){
+  const a=raw.filter(n=>n.pitchMidi>=40&&n.pitchMidi<=84).sort((x,y)=>x.startTimeSeconds-y.startTimeSeconds);
+  const out=[],last={};
+  for(const n of a){
+    const s=n.startTimeSeconds,e=s+n.durationSeconds,l=last[n.pitchMidi];
+    if(l&&s<=l.end+.06){l.end=Math.max(l.end,e);l.a=Math.max(l.a,n.amplitude);continue}
+    const o={s,end:e,p:n.pitchMidi,a:n.amplitude};out.push(o);last[n.pitchMidi]=o;
+  }
+  const H=[12,19,24,28,31,36];
+  return out.filter(n=>!out.some(m=>m!==n&&Math.abs(m.s-n.s)<.08&&H.includes(n.p-m.p)&&m.end-m.s>=n.end-n.s));
+}
+/* nhận dạng guitar từ PCM 22050 Hz mono đã xử lý sẵn */
+async function transcribeGuitarPCM(data){
+  log('Tải thư viện nhận dạng guitar (TensorFlow.js + Basic Pitch)…');
+  await ensureBP();
+  log('Nhận dạng nốt guitar ('+(data.length/22050).toFixed(1)+' giây). Bước này có thể mất vài phút…');
+  const bp=new BP.BasicPitch(BPMODEL),fr=[],on=[];
+  await bp.evaluateModel(data,(f,o)=>{fr.push(...f);on.push(...o)},p=>{gp=Math.round(p*100)+'%'});
+  gp='';
+  const g=guitarNotes(BP.noteFramesToTime(BP.outputToNotesPoly(fr,on,.3,.3,9,true,1100,80,true,11)));
+  return{notes:g.map(n=>({pitch:n.p,startTime:n.s,endTime:n.end,velocity:Math.max(1,Math.round((n.a||.5)*127))}))};
+}
+/* nhận dạng piano: Onsets and Frames của Magenta */
+async function ensureOF(){
+  if(model)return;
+  log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');
+  const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok');
 }
 function wav16(x,sr){
   const b=new ArrayBuffer(44+x.length*2),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
@@ -916,43 +1123,6 @@ function cleanNotes(a,kind,lv){
   }
   return out.map(n=>({...n,e:Math.min(n.e,n.s+8)})).sort((x,y)=>x.s-y.s);
 }
-
-/* ---------- Nhận dạng guitar: TensorFlow.js 3.21.0 + Basic Pitch 1.0.1 ---------- */
-const TFURL='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js';
-const BPMODEL='https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json';
-let gp='';
-const loadScript=u=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=u;e.onload=res;e.onerror=()=>rej(new Error('Không tải được '+u));document.head.appendChild(e)});
-async function ensureBP(){
-  if(window.BP)return;
-  if(!window.tf||!window.tf.version||!/^3\./.test(window.tf.version.tfjs||''))await loadScript(TFURL);
-  const e=document.createElement('script');e.text=$('#bpsrc').textContent;document.head.appendChild(e);
-  if(!window.BP)throw new Error('Không khởi tạo được bộ nhận dạng guitar.');
-}
-/* gộp nốt cùng cao độ bị cắt khúc, bỏ họa âm (quãng 8/12/19...) và nốt ngoài tầm đàn guitar */
-function guitarNotes(raw){
-  const a=raw.filter(n=>n.pitchMidi>=40&&n.pitchMidi<=84).sort((x,y)=>x.startTimeSeconds-y.startTimeSeconds);
-  const out=[],last={};
-  for(const n of a){
-    const s=n.startTimeSeconds,e=s+n.durationSeconds,l=last[n.pitchMidi];
-    if(l&&s<=l.end+.06){l.end=Math.max(l.end,e);l.a=Math.max(l.a,n.amplitude);continue}
-    const o={s,end:e,p:n.pitchMidi,a:n.amplitude};out.push(o);last[n.pitchMidi]=o;
-  }
-  const H=[12,19,24,28,31,36];
-  return out.filter(n=>!out.some(m=>m!==n&&Math.abs(m.s-n.s)<.08&&H.includes(n.p-m.p)&&m.end-m.s>=n.end-n.s));
-}
-/* r = stem đã chuẩn bị bởi prepareStem(): {data:Float32Array 22050 Hz mono, dur} */
-async function transcribeGuitar(r){
-  log('Tải thư viện nhận dạng guitar (TensorFlow.js + Basic Pitch)…');
-  await ensureBP();
-  log('Nhận dạng nốt guitar ('+r.dur.toFixed(1)+' giây). Bước này có thể mất vài phút…');
-  const data=r.data;r.data=null;
-  const bp=new BP.BasicPitch(BPMODEL),fr=[],on=[];
-  await bp.evaluateModel(data,(f,o)=>{fr.push(...f);on.push(...o)},p=>{gp=Math.round(p*100)+'%'});
-  gp='';
-  try{const m=await bp.model;if(m&&m.dispose)m.dispose()}catch(e){} /* giải phóng trọng số mô hình khỏi RAM */
-  const g=guitarNotes(BP.noteFramesToTime(BP.outputToNotesPoly(fr,on,.3,.3,9,true,1100,80,true,11)));
-  return{notes:g.map(n=>({pitch:n.p,startTime:n.s,endTime:n.end,velocity:Math.max(1,Math.round((n.a||.5)*127))}))};
-}
 /* dựng lại NoteSequence sau khi lọc (có controlChanges để Magenta ghi được MIDI) */
 function finishSeq(ns,kind,lv){
   const arr=ns.notes.map(n=>({p:n.pitch,s:n.startTime||0,e:n.endTime,v:(n.velocity||80)/127}));
@@ -962,244 +1132,113 @@ function finishSeq(ns,kind,lv){
   return{notes,controlChanges:[],totalTime:Math.max(0,...notes.map(n=>n.endTime)),ticksPerQuarter:220,tempos:[{time:0,qpm:120}]};
 }
 
-/* ================= CHUỖI XỬ LÝ ÂM THANH =================
-   MP3/MP4 → Audio Decode → dọn RAM → Music Source Separation → Stem piano/nhạc cụ
-   → Giảm nhiễu nhẹ → Nhận dạng nốt → MIDI → Quy đổi Sky */
-const PIPE=['Audio Decode (MP3 / MP4 / WAV…)','Dọn bộ nhớ RAM','Tách nguồn (Music Source Separation)','Stem piano / nhạc cụ','Giảm nhiễu nhẹ','Nhận dạng nốt','MIDI → quy đổi Sky'];
-let pcur=-1,pTxt='',stemBlob=null,stemUrl=null;
-function pstep(i,st,txt){
-  const e=$('#p'+i);if(!e)return;e.dataset.st=st;
-  if(st==='run'){pcur=i;pTxt=txt||''}
-  e.querySelector('span').textContent=({ok:'✔ ',err:'✖ ',run:'… '}[st]||'')+(txt||'');
-}
-function pipeReset(show){
-  $('#pipew').hidden=!show;pcur=-1;pTxt='';
-  $('#pipe').innerHTML=PIPE.map((t,i)=>'<li id="p'+i+'" data-st="idle"><b>'+t+':</b> <span>Chờ</span></li>').join('');
-}
-function setStem(b){
-  stemBlob=b;if(stemUrl){URL.revokeObjectURL(stemUrl);stemUrl=null}
-  const a=$('#stemAudio'),btn=$('#bStem');
-  if(b){stemUrl=URL.createObjectURL(b);a.src=stemUrl;a.hidden=false;btn.hidden=false}
-  else{a.removeAttribute('src');a.hidden=true;btn.hidden=true}
-}
-$('#bStem').onclick=()=>{if(stemBlob){download(safe()+'-stem.wav',stemBlob);log('Đã tải '+safe()+'-stem.wav','ok')}};
-const heapMB=()=>performance.memory?performance.memory.usedJSHeapSize/1048576:null;
-/* Dọn RAM: các biến lớn đã được gán null trước khi gọi; ở đây chỉ nhường cho trình duyệt thu gom và ghi nhận lại mức dùng (nếu trình duyệt cho đo) */
-async function freeRam(why){
-  const a=heapMB();
-  try{if(typeof window.gc==='function')window.gc()}catch(e){}
-  await new Promise(r=>setTimeout(r,80));
-  const b=heapMB();
-  log('Dọn RAM ('+why+')'+(b==null?'':': JS heap '+(a!=null?a.toFixed(0)+' → ':'')+b.toFixed(0)+' MB'),'ok');
-}
-/* Giải mã bằng Web Audio (MP3, MP4/M4A/AAC, WAV, FLAC, OGG… tùy trình duyệt), đưa về 22050 Hz STEREO.
-   H.b (ArrayBuffer file gốc) được giao hẳn cho decodeAudioData, không giữ bản sao nào khác. */
-async function decodeStereo22k(H){
-  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();
-  let ab=null,out=null;
-  try{
-    try{ab=await new Promise((res,rej)=>ac.decodeAudioData(H.b,res,rej))}
-    catch(e){throw new Error('Không giải mã được âm thanh. Với MP4/video, trình duyệt cần hỗ trợ codec âm thanh của video (thường là AAC); nếu lỗi, hãy xuất âm thanh ra MP3/WAV rồi thử lại.')}
-    H.b=null;
-    const dur=ab.duration,nch=ab.numberOfChannels,sr0=ab.sampleRate;
-    const off=new OfflineAudioContext(2,Math.max(1,Math.ceil(dur*22050)),22050),src=off.createBufferSource();
-    src.buffer=ab;src.connect(off.destination);src.start();
-    out=await off.startRendering();
-    ab=null;
-    return{L:out.getChannelData(0),R:out.getChannelData(1),dur,nch,sr0};
-  }finally{try{await ac.close()}catch(e){}}
-}
+/* ---------- Pipeline âm thanh → nốt ----------
+   MP3/MP4 → giải mã → (dọn RAM) → tách nguồn (Demucs, dự phòng HPSS) → (dọn RAM) → lọc nhiễu nhẹ
+   → nhận dạng nốt (Onsets and Frames / Basic Pitch) → NoteSequence (rồi MIDI → quy đổi Sky ở hàm load/convert) */
+async function audioToNotes(f,kind,filt,sepMode){
+  const c=FILT[filt],full=sepMode==='ai',isG=kind==='guitar';
+  /* đường cũ: piano, không tách nguồn, không lọc → để Magenta tự giải mã file */
+  if(!isG&&!full&&!c){
+    [0,1,2].forEach(i=>step(i,'ok','Bỏ qua (mô hình tự giải mã file gốc)'));
+    step(3,'run','Nhận dạng nốt piano…');
+    await ensureOF();
+    log('Giải mã âm thanh và nhận dạng nốt piano. Bước này có thể mất vài phút…');
+    return await model.transcribeFromAudioFile(f);
+  }
+  if(f.size>300*1048576)log('File lớn ('+(f.size/1048576).toFixed(0)+' MB): giải mã cần nhiều RAM, nên đổi riêng âm thanh ra MP3/M4A nếu máy yếu','wr');
 
-/*@@DSP-BEGIN*/
-const SPN=1024,SPH=512,SPF=SPN/2+1,SPR=22050;
-const SPW=(()=>{const w=new Float32Array(SPN);for(let i=0;i<SPN;i++)w[i]=Math.sqrt(.5-.5*Math.cos(2*Math.PI*i/SPN));return w})();
-const spFrames=len=>Math.max(1,Math.ceil((len-SPN)/SPH)+1);
-/* mặt nạ dải tần cho nhạc cụ: cắt bass/kick dưới lo, cắt tiếng xì trên hi (có đoạn chuyển mềm) */
-function bandGain(lo,hi){
-  const g=new Float32Array(SPF);
-  for(let k=0;k<SPF;k++){
-    const f=k*SPR/SPN;let v=1;
-    if(f<lo*.7)v=0;else if(f<lo)v=(f-lo*.7)/(lo*.3);
-    if(f>hi*1.2)v=0;else if(f>hi)v=Math.min(v,1-(f-hi)/(hi*.2));
-    g[k]=v;
+  /* 1) giải mã */
+  step(0,'run','Giải mã âm thanh…');
+  let buf=await f.arrayBuffer(),dec=null,x=null,dur=0;
+  if(full){
+    log('Giải mã → PCM 44,1 kHz stereo (đầu vào của mô hình tách nguồn)…');
+    dec=await decode44(buf);buf=null;dur=dec.dur;
+  }else{
+    log('Giải mã → PCM 22,05 kHz mono'+(c?' có lọc bass/hi-hat':'')+'…');
+    const r=await decode22k(buf,c?c.hp:0);buf=null;x=r.data;dur=r.dur;
   }
-  return g;
-}
-/* Tách nguồn một đoạn: STFT hai kênh → mid, mặt nạ harmonic/percussive (median, mềm) → mặt nạ dải tần
-   → (tùy chọn) giảm thành phần nằm chính giữa trong dải giọng hát → ISTFT. c={keep,bg,vr,vk0,vk1} */
-function sepSeg(l,r,c){
-  const N=SPN,H=SPH,F=SPF,len=l.length,T=spFrames(len),R=8,w=SPW;
-  const aL=new Float32Array(T*F),bL=new Float32Array(T*F),aR=new Float32Array(T*F),bR=new Float32Array(T*F),Mg=new Float32Array(T*F);
-  const re=new Float32Array(N),im=new Float32Array(N);
-  for(let t=0;t<T;t++){
-    for(let i=0;i<N;i++){const p=t*H+i;re[i]=p<len?l[p]*w[i]:0;im[i]=0}
-    fft(re,im,false);
-    for(let k=0;k<F;k++){aL[t*F+k]=re[k];bL[t*F+k]=im[k]}
-    for(let i=0;i<N;i++){const p=t*H+i;re[i]=p<len?r[p]*w[i]:0;im[i]=0}
-    fft(re,im,false);
-    for(let k=0;k<F;k++){const q=t*F+k;aR[q]=re[k];bR[q]=im[k];Mg[q]=Math.hypot((aL[q]+re[k])*.5,(bL[q]+im[k])*.5)}
-  }
-  let Hm=null,Pm=null;
-  if(c.keep<1){
-    Hm=new Float32Array(T*F);Pm=new Float32Array(T*F);
-    const tmp=new Float32Array(2*R+1);
-    const med=n=>{for(let i=1;i<n;i++){const v=tmp[i];let j=i-1;while(j>=0&&tmp[j]>v){tmp[j+1]=tmp[j];j--}tmp[j+1]=v}return tmp[n>>1]};
-    for(let k=0;k<F;k++)for(let t=0;t<T;t++){let n=0;for(let d=-R;d<=R;d++){const tt=t+d;if(tt>=0&&tt<T)tmp[n++]=Mg[tt*F+k]}Hm[t*F+k]=med(n)}
-    for(let t=0;t<T;t++)for(let k=0;k<F;k++){let n=0;for(let d=-R;d<=R;d++){const kk=k+d;if(kk>=0&&kk<F)tmp[n++]=Mg[t*F+kk]}Pm[t*F+k]=med(n)}
-  }
-  const y=new Float32Array(len),bg=c.bg;
-  for(let t=0;t<T;t++){
-    for(let k=0;k<F;k++){
-      const q=t*F+k;let g=bg[k];
-      if(g>0){
-        if(Hm){const h=Hm[q]*Hm[q],p=Pm[q]*Pm[q],mh=h/(h+p+1e-12);g*=mh+c.keep*(1-mh)}
-        if(c.vr>0&&k>=c.vk0&&k<=c.vk1){
-          const a=Math.hypot(aL[q],bL[q]),b=Math.hypot(aR[q],bR[q]),s=2*Math.min(a,b)/(a+b+1e-9),s2=s*s;
-          g*=Math.max(.1,1-c.vr*s2*s2);
-        }
-      }
-      re[k]=(aL[q]+aR[q])*.5*g;im[k]=(bL[q]+bR[q])*.5*g;
-      if(k>0&&k<F-1){re[N-k]=re[k];im[N-k]=-im[k]}
+  log('Giải mã xong: '+dur.toFixed(1)+' giây','ok');
+  step(0,'ok',fmtT(dur)+' · '+(full?'44,1 kHz stereo':'22,05 kHz mono'));
+  await freeMem('giải mã (đã bỏ file nén gốc và bộ giải mã)');
+
+  /* 2) tách nguồn */
+  let banded=false;
+  if(full){
+    step(1,'run','Tách nguồn AI (Demucs)…');
+    try{
+      x=await demucsOther(dec);
+      step(1,'ok','Demucs · lấy stem "other" (piano/guitar/nhạc cụ), đã bỏ giọng hát, trống, bass');
+      log('Tách nguồn AI xong','ok');
+    }catch(e){
+      log('Tách nguồn AI không chạy được ('+((e&&e.message)||e)+'). Chuyển sang bộ lọc nhanh HPSS.','wr');
+      step(1,'run','Dự phòng: HPSS…');
+      x=half(midOf(dec));
+      if(c){x=await filterBand(x,c.hp);x=await hpssAll(x,c.keep);banded=true}
+      step(1,'ok','Dự phòng: '+(c?'HPSS (tách trống/hi-hat)':'trộn mono, không lọc'));
     }
-    fft(re,im,true);
-    for(let i=0;i<N;i++){const p=t*H+i;if(p<len)y[p]+=re[i]/N*w[i]}
-  }
-  return y;
-}
-/* Giảm nhiễu nhẹ: ước lượng sàn nhiễu mỗi tần số (phân vị 10% theo thời gian) rồi trừ phổ có giới hạn. c={a,fl} */
-function nrSeg(x,c){
-  const N=SPN,H=SPH,F=SPF,len=x.length,T=spFrames(len),w=SPW;
-  if(T<24)return x.slice();
-  const Re=new Float32Array(T*F),Im=new Float32Array(T*F),Mg=new Float32Array(T*F),re=new Float32Array(N),im=new Float32Array(N);
-  for(let t=0;t<T;t++){
-    for(let i=0;i<N;i++){const p=t*H+i;re[i]=p<len?x[p]*w[i]:0;im[i]=0}
-    fft(re,im,false);
-    for(let k=0;k<F;k++){const q=t*F+k;Re[q]=re[k];Im[q]=im[k];Mg[q]=Math.hypot(re[k],im[k])}
-  }
-  const nf=new Float32Array(F),ns=new Float32Array(F),col=new Float32Array(T);
-  for(let k=0;k<F;k++){for(let t=0;t<T;t++)col[t]=Mg[t*F+k];col.sort();nf[k]=col[Math.floor(T*.1)]}
-  for(let k=0;k<F;k++)ns[k]=(nf[Math.max(0,k-1)]+nf[k]+nf[Math.min(F-1,k+1)])/3;
-  const y=new Float32Array(len);
-  for(let t=0;t<T;t++){
-    for(let k=0;k<F;k++){
-      const q=t*F+k,g=Math.max(c.fl,1-c.a*ns[k]/(Mg[q]+1e-9));
-      re[k]=Re[q]*g;im[k]=Im[q]*g;
-      if(k>0&&k<F-1){re[N-k]=re[k];im[N-k]=-im[k]}
-    }
-    fft(re,im,true);
-    for(let i=0;i<N;i++){const p=t*H+i;if(p<len)y[p]+=re[i]/N*w[i]}
-  }
-  return y;
-}
-/* chạy theo từng đoạn 40 giây (có đệm 2048 mẫu hai đầu) để không tốn RAM với bài dài */
-async function segProc(n,fn){
-  const SEG=22050*40,M=2048,out=new Float32Array(n);
-  for(let a=0;a<n;a+=SEG){
-    const s=Math.max(0,a-M),e=Math.min(n,a+SEG+M),y=fn(s,e),m=Math.min(SEG,n-a);
-    out.set(y.subarray(a-s,a-s+m),a);
-    gp=Math.round(Math.min(1,(a+m)/n)*100)+'%';await frame();
-  }
-  gp='';return out;
-}
-/*@@DSP-END*/
+    dec=null;
+    await freeMem('tách nguồn (đã bỏ PCM stereo 44,1 kHz)');
+  }else if(c){
+    step(1,'run','HPSS: tách trống/hi-hat…');
+    x=await hpssAll(x,c.keep);
+    step(1,'ok','HPSS (không dùng AI)');
+  }else step(1,'ok','Bỏ qua (tắt tách nguồn và lọc)');
 
-/* Chuẩn bị stem cho bước nhận dạng nốt. Trả về {data:Float32Array mono 22050 Hz, dur, blob} */
-async function prepareStem(H,kind,lv){
-  const c=FILT[lv],sepOn=$('#sep').value!=='off',vr={off:0,mid:.6,hard:.85}[$('#vr').value]||0,
-    nrC={light:{a:1,fl:.25},mid:{a:1.6,fl:.15}}[$('#nr').value];
-  /* 1) Audio Decode */
-  pstep(0,'run','Giải mã về 22050 Hz stereo…');log('Audio Decode: giải mã file về 22050 Hz');
-  await frame();
-  const d=await decodeStereo22k(H);
-  pstep(0,'ok',fmtT(d.dur)+' · '+(d.nch>1?d.nch+' kênh':'mono')+' · '+d.sr0+' Hz → 22050 Hz');
-  /* 2) Dọn RAM: bỏ file gốc (đã giao cho decoder), chỉ giữ PCM 22 kHz */
-  pstep(1,'run','Giải phóng file gốc và bộ đệm giải mã…');
-  H.b=null;await freeRam('sau Audio Decode');
-  pstep(1,'ok','Đã bỏ file gốc khỏi RAM, chỉ giữ PCM 22 kHz');
-  /* 3) Music Source Separation */
-  let eM=0,eS=0;
-  for(let i=0;i<d.L.length;i+=4){const m=d.L[i]+d.R[i],s=d.L[i]-d.R[i];eM+=m*m;eS+=s*s}
-  const mono=eS<=.002*eM,lo=c?c.hp:40,hi=5500;
-  const cfg={keep:sepOn?(c?c.keep:.4):1,bg:bandGain(lo,hi),vr:0,vk0:Math.round(200*SPN/SPR),vk1:Math.round(3500*SPN/SPR)};
-  if(vr>0){if(mono)log('Giảm giọng hát: file gần như mono nên bỏ qua (không có thông tin trái/phải để tách)','wr');else cfg.vr=vr}
-  pstep(2,'run',sepOn?'Tách harmonic / percussive'+(cfg.vr?' + giảm giọng ở giữa':'')+'…':'Chỉ lọc dải tần '+lo+'–'+hi+' Hz…');
-  log('Music Source Separation: '+(sepOn?'tách phần đàn khỏi trống/hi-hat/bass'+(cfg.vr?', giảm thành phần ở giữa':''):'chỉ lọc dải tần')+(mono?' (nguồn mono)':' (nguồn stereo)'));
-  await frame();
-  let stem=await segProc(d.L.length,(s,e)=>sepSeg(d.L.subarray(s,e),d.R.subarray(s,e),cfg));
-  const dur=d.dur;d.L=null;d.R=null;
-  pstep(2,'ok',sepOn?'Đã tách xong':'Đã lọc dải tần');
-  await freeRam('sau tách nguồn');
-  /* 4) Stem piano / nhạc cụ */
-  pstep(3,'run','Kiểm tra stem…');
-  let pk=0,ss=0;for(let i=0;i<stem.length;i++){const v=Math.abs(stem[i]);if(v>pk)pk=v;ss+=v*v}
-  if(pk<1e-4)throw new Error('Stem gần như im lặng sau khi tách nguồn. Hãy thử đặt "Tách nguồn" hoặc "Lọc nhạc nền" về Tắt.');
-  pstep(3,'ok','Stem '+kind+' · RMS '+(20*Math.log10(Math.sqrt(ss/stem.length)+1e-12)).toFixed(1)+' dB');
-  /* 5) Giảm nhiễu nhẹ */
-  if(nrC){
-    pstep(4,'run','Spectral gating (mức '+($('#nr').value==='mid'?'vừa':'nhẹ')+')…');await frame();
-    const x=stem;stem=await segProc(x.length,(s,e)=>nrSeg(x.subarray(s,e),nrC));
-    pstep(4,'ok','Đã giảm nhiễu nền');
-  }else pstep(4,'ok','Bỏ qua (đã tắt)');
-  /* chuẩn hóa biên độ về 0.9 để mô hình nhận dạng nhận mức tín hiệu ổn định */
-  pk=0;for(let i=0;i<stem.length;i++){const v=Math.abs(stem[i]);if(v>pk)pk=v}
-  if(pk>0){const g=.9/pk;for(let i=0;i<stem.length;i++)stem[i]*=g}
-  let blob=null;
-  if($('#keepstem').checked){blob=wav16(stem,22050);setStem(blob);log('Đã giữ stem để nghe thử / tải về','ok')}
-  return{data:stem,dur,blob};
+  /* 3) lọc nhiễu nhẹ */
+  if(full&&c){
+    step(2,'run','Lọc nhiễu nhẹ…');
+    if(!banded)x=await filterBand(x,c.hp);
+    x=await denoiseAll(x,c.dn);
+    step(2,'ok','Lọc dải + trừ nhiễu phổ nhẹ (mức '+(filt==='hard'?'mạnh':'vừa')+')');
+    await freeMem('lọc nhiễu');
+  }else step(2,'ok',full?'Bỏ qua (đã tắt lọc)':'Bỏ qua (chỉ dùng khi bật tách nguồn AI)');
+
+  /* 4) nhận dạng nốt */
+  step(3,'run',isG?'Nhận dạng nốt guitar…':'Nhận dạng nốt piano…');
+  let ns;
+  if(isG){ns=await transcribeGuitarPCM(x);x=null}
+  else{
+    await ensureOF();
+    let wav=wav16(x,22050);x=null;
+    await freeMem('đóng gói âm thanh đã lọc');
+    log('Nhận dạng nốt piano. Bước này có thể mất vài phút…');
+    ns=await model.transcribeFromAudioFile(wav);wav=null;
+  }
+  await freeMem('nhận dạng nốt');
+  return ns;
 }
 
-async function load(f,inst,filt){
+async function load(f,inst,filt,sepIn){
   if(!f)return;stop();song=null;midiBytes=null;render();
-  inst=inst||$('#srcinst').value;$('#srcinst').value=inst;filt=filt||$('#filt').value;$('#filt').value=filt;document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
+  inst=inst||$('#srcinst').value;$('#srcinst').value=inst;filt=filt||$('#filt').value;$('#filt').value=filt;
+  const sepMode=sepIn||$('#sep').value;$('#sep').value=sepMode;
+  document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
   T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#bPro').hidden=true;$('#pro').hidden=true;$('#pval').innerHTML='';$('#bProCsv').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
-  pipeReset(false);setStem(null);
-  [0,1,2].forEach(i=>step(i,'idle','Chờ…'));
+  [0,1,2,3,4,5].forEach(i=>step(i,'idle','Chờ…'));
   fileName=f.name.replace(/\.[^.]+$/,'');
   log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
-  const timer=setInterval(()=>{
-    const e=$('#s0');if(e.dataset.st==='run')e.querySelector('span').textContent='… Đang chạy… '+Math.floor((performance.now()-T0)/1000)+' giây'+(gp?' · '+gp:'');
-    const pe=pcur>=0?$('#p'+pcur):null;if(pe&&pe.dataset.st==='run')pe.querySelector('span').textContent='… '+pTxt+(gp?' · '+gp:'');
-  },500);
+  const timer=setInterval(()=>{const e=document.querySelector('#steps li[data-st="run"]');if(e)e.querySelector('span').textContent='… '+(e.dataset.base||'Đang chạy')+' · '+Math.floor((performance.now()-T0)/1000)+' giây'+(gp?' · '+gp:'')},500);
   try{
-    let buf=await f.arrayBuffer();const h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
+    const h=String.fromCharCode(...new Uint8Array(await f.slice(0,4).arrayBuffer()));
     if(h==='MThd'){
-      step(0,'ok','Bỏ qua: file đã là MIDI');log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
+      [0,1,2,3].forEach(i=>step(i,'ok','Bỏ qua: file đã là MIDI'));log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
+      const buf=await f.arrayBuffer();
       parseMidi(buf);midiBytes=buf;$('#bMid').hidden=false;$('#bPro').hidden=false;$('#tol').value=0;$('#name').value=fileName;
       await dbPut('midi',{blob:new Blob([buf],{type:'audio/midi'}),name:fileName,inst});
       log('Đọc được '+tracks.length+' track, '+tracks.reduce((a,t)=>a+t.notes.length,0)+' nốt');
       showTracks();await convert();
     }else if(/\.(txt|json|skysheet)$/i.test(f.name)||f.type==='text/plain'||f.type==='application/json'){
-      step(0,'ok','Bỏ qua: đã là file Sky');loadSky(buf);
+      [0,1,2,3].forEach(i=>step(i,'ok','Bỏ qua: đã là file Sky'));loadSky(await f.arrayBuffer());
     }else{
-      step(0,'run','Đang chuẩn bị…');
       if(!window.mm)throw new Error('Không tải được thư viện Magenta, hãy kiểm tra kết nối internet.');
       try{await dbDel('midi')}catch(e){} /* tải bài mới thì xóa bài cũ */
-      const isG=inst==='guitar',kind=isG?'guitar':'piano';let ns;
-      /* chuỗi mới chạy khi: guitar, hoặc bật tách nguồn, hoặc bật lọc nhạc nền; piano + tắt cả hai thì giữ cách cũ */
-      const usePipe=isG||$('#sep').value!=='off'||!!FILT[filt];
-      pipeReset(usePipe);
-      let stem=null;
-      if(usePipe){
-        const Hd={b:buf};buf=null; /* giao file gốc cho bộ giải mã, không giữ tham chiếu nào khác */
-        stem=await prepareStem(Hd,kind,filt);
-      }
-      pstep(5,'run','Nhận dạng nốt '+kind+'…');
-      if(isG)ns=await transcribeGuitar(stem);
-      else{
-        if(!model){log('Tải mô hình Onsets and Frames (chỉ lần đầu, vài chục MB)…');const m=new mm.OnsetsAndFrames(CKPT);await m.initialize();model=m;log('Mô hình đã sẵn sàng','ok')}
-        let src=f;
-        if(stem){src=stem.blob||wav16(stem.data,22050);stem.data=null;await freeRam('trước khi nhận dạng piano')}
-        log('Nhận dạng nốt piano từ '+(stem?'stem đã tách':'file gốc')+'. Bước này có thể mất vài phút…');
-        ns=await model.transcribeFromAudioFile(src);
-        src=null;
-      }
-      stem=null;
+      const isG=inst==='guitar',kind=isG?'guitar':'piano';
+      let ns=await audioToNotes(f,kind,filt,sepMode);
       if(isG||FILT[filt])ns=finishSeq(ns,kind,filt);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt '+(isG?'guitar':'piano')+' nào trong file.');
-      buf=null; /* bỏ dữ liệu âm thanh gốc, chỉ giữ nốt */
       midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;$('#bPro').hidden=false;
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
-      step(0,'ok',ns.notes.length+' nốt');pstep(5,'ok',ns.notes.length+' nốt');
+      step(3,'ok',ns.notes.length+' nốt → MIDI');
       /* Dọn dẹp: lưu MIDI rồi xóa MP3 đã lưu trước đó */
       try{
         await dbPut('midi',{blob:new Blob([midiBytes],{type:'audio/midi'}),name:fileName,inst});
@@ -1207,19 +1246,16 @@ async function load(f,inst,filt){
         log('Chỉ giữ nốt '+(isG?'guitar':'piano')+' (MIDI); đã bỏ nhạc gốc của video và xóa MP3 đã lưu','ok');
       }catch(e){log('Không dọn được dữ liệu lưu tạm: '+(e.message||e),'wr')}
       tracks=[{name:(isG?'Guitar':'Piano')+' nhận dạng từ '+f.name,notes:ns.notes.map(n=>({tick:(n.startTime||0)*1000,n:n.pitch,end:n.endTime*1000}))}];
-      tempos=[{tick:0,us:1000000}];division=1000;
       ns=null;
+      tempos=[{tick:0,us:1000000}];division=1000;
       $('#tol').value=35;$('#name').value=fileName;
       log('Tự điền sai số 35 ms vì thời gian nốt nhận dạng từ âm thanh không tròn nhịp');
-      pstep(6,'run','Tạo MIDI và quy đổi sang 15 phím…');
       showTracks();await convert();
-      pstep(6,song?'ok':'err',song?song.songNotes.length+' nốt Sky · BPM '+song.bpm:'Quy đổi lỗi');
-      await freeRam('hoàn tất');
     }
   }catch(e){
-    const pe=pcur>=0?$('#p'+pcur):null;if(pe&&pe.dataset.st==='run')pstep(pcur,'err','Lỗi');
-    const i=$('#s0').dataset.st==='run'?0:1;step(i,'err','Lỗi');log('Lỗi: '+(e.message||e),'err');
-  }finally{clearInterval(timer)}
+    const ls=[...document.querySelectorAll('#steps li')],i=ls.findIndex(l=>l.dataset.st==='run');
+    step(i>=0?i:4,'err','Lỗi');log('Lỗi: '+(e.message||e),'err');
+  }finally{clearInterval(timer);gp=''}
 }
 function loadSky(buf){
   const u=new Uint8Array(buf);let txt;
@@ -1232,7 +1268,7 @@ function loadSky(buf){
   $('#opts').hidden=false;
   $('#name').value=j.name||fileName;$('#author').value=j.author||'';$('#by').value=j.transcribedBy||'';
   $('#tracks').innerHTML='';
-  step(1,'ok','Bỏ qua: đã là file Sky');step(2,'ok','Có thể nghe thử hoặc xuất lại');
+  step(4,'ok','Bỏ qua: đã là file Sky');step(5,'ok','Có thể nghe thử hoặc xuất lại');
   log('Đã mở bản nhạc Sky: '+j.songNotes.length+' nốt, BPM '+j.bpm,'ok');
   render();
 }
@@ -1248,7 +1284,7 @@ if(window.Tone)loadInst(pinst());else log('Không tải được Tone.js (cần 
 (async()=>{
   try{
     const p=await dbGet('pending');
-    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}),p.inst,p.filt)}
+    if(p&&p.blob){log('Nhận MP3 từ trang tải: '+p.name);return load(new File([p.blob],p.name,{type:p.blob.type||'audio/mpeg'}),p.inst,p.filt,p.sep)}
     const m=await dbGet('midi');
     if(m&&m.blob){log('Mở lại MIDI đang giữ: '+m.name);load(new File([m.blob],m.name+'.mid',{type:'audio/midi'}),m.inst)}
   }catch(e){log('Không đọc được dữ liệu lưu tạm: '+(e.message||e),'err')}
