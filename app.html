@@ -30,6 +30,9 @@ button{padding:8px 14px;font:inherit;cursor:pointer;background:#1e222d;color:#e5
 .key.hit svg{stroke:#1b3052}
 .ctr{text-align:center}
 #rollbox{overflow-x:auto;border:1px solid #2a2d38;margin-top:12px;background:#050608}#roll{display:block}
+h3{font-size:14px;margin:12px 0 4px}.mut{color:#9ca3af;font-size:13px}
+.ptr{display:block;margin:8px 0;color:#e5e7eb;font-size:14px}.ptr small{display:block;margin-left:24px;color:#9ca3af;font-size:12px}
+#pval{margin-top:12px;color:#9ca3af;font-size:13px;line-height:1.7}#pval b{color:#06b6d4}#pval .w{color:#fbbf24}
 #rep{margin-top:12px;color:#9ca3af}#rep b{color:#06b6d4}
 textarea{height:120px;font:12px ui-monospace,monospace}
 #dz{display:block;border:2px dashed #4b5563;background:#0b0c10;padding:28px 12px;margin:12px 0 4px;text-align:center;cursor:pointer;color:#e5e7eb;font-size:15px}
@@ -58,7 +61,7 @@ textarea{height:120px;font:12px ui-monospace,monospace}
     <li id="s1" data-st="idle"><b>Quy đổi sang 15 phím:</b> <span>Chờ file</span></li>
     <li id="s2" data-st="idle"><b>Sẵn sàng xuất:</b> <span>Chờ file</span></li>
   </ol>
-  <button id="bMid" hidden>Tải MIDI</button>
+  <button id="bMid" hidden>Tải MIDI</button> <button id="bPro" hidden>⚙ Chuyển MIDI chính xác</button>
   <div id="log" role="log" aria-live="polite"></div>
 </section>
 
@@ -86,6 +89,25 @@ textarea{height:120px;font:12px ui-monospace,monospace}
   </div>
   <div id="tracks"></div>
   </details>
+</section>
+
+<section id="pro" hidden>
+  <h2>Chuyển MIDI chính xác</h2>
+  <p class="mut">Đọc trực tiếp metadata MIDI (track, channel, program, percussion flag, tempo map, sustain pedal). Không chạy HPSS, FFT, Basic Pitch hay Onsets &amp; Frames cho MIDI. MIDI gốc được giữ bất biến; mọi thay đổi đều được thống kê.</p>
+  <h3>CHỌN NHẠC CỤ / TRACK</h3>
+  <div id="ptracks"></div>
+  <p id="pinfo" class="mut"></p>
+  <div class="grid">
+    <label>Chế độ chuyển đổi
+      <select id="pmode"><option value="exact">EXACT: giữ pitch/timing tối đa</option><option value="melody">MELODY: ưu tiên giai điệu</option><option value="clean">CLEAN: loại percussion và dữ liệu lỗi</option></select></label>
+    <label>Timing
+      <select id="ptim"><option value="exact">Exact Timing</option><option value="smart">Smart Quantize</option><option value="manual">Manual Quantize (dùng ô BPM của game)</option></select></label>
+    <label>Polyphony tối đa
+      <select id="ppoly"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option selected>10</option></select></label>
+  </div>
+  <p class="mut">Dịch tông, quãng tám, thăng/giáng, nốt giữ, tốc độ và BPM/sai số lấy từ các ô trong phần "Thông tin bài hát và tùy chỉnh".</p>
+  <button id="bProGo">Chỉ chuyển track đã chọn</button> <button id="bProCsv" hidden>Tải nhật ký mapping (.csv)</button>
+  <div id="pval"></div>
 </section>
 
 <section id="mplay" hidden>
@@ -204,7 +226,7 @@ $('#bStop').onclick=()=>{stop();log('Đã dừng phát')};
 $('#bPlay').onclick=()=>{
   if(!song)return;
   const Lg=60000/(song.bpm||120);
-  const raw=song.songNotes.map(n=>({i:+n.key.replace(/^\dKey/,''),t:Math.floor(n.time/Lg)*Lg})).sort((a,b)=>a.t-b.t);
+  const raw=song.songNotes.map(n=>({i:+n.key.replace(/^\dKey/,''),t:song._exact?n.time:Math.floor(n.time/Lg)*Lg})).sort((a,b)=>a.t-b.t);
   if(!raw.length)return;
   const t0=raw[0].t,ev=raw.map(e=>({time:(e.t-t0)/1000,i:e.i}));
   play(ev,(t,e,s)=>{s.triggerAttackRelease(noteName(keyMidi(e.i)),.6,t,.8);Tone.Draw.schedule(()=>flash(e.i,140),t)},ev[ev.length-1].time,()=>{},()=>{});
@@ -407,7 +429,7 @@ async function convert(){
 /* ---------- Piano roll ---------- */
 function drawRoll(){
   const cv=$('#roll'),n=song.songNotes;if(!n.length){cv.width=1;return}
-  const Lg=60000/(song.bpm||120),cs=n.map(x=>({c:Math.floor(x.time/Lg),k:+x.key.replace(/^\dKey/,'')}));
+  const Lg=song._cell||60000/(song.bpm||120),cs=n.map(x=>({c:Math.floor(x.time/Lg),k:+x.key.replace(/^\dKey/,'')}));
   let c0=Infinity,c1=-Infinity;for(const a of cs){if(a.c<c0)c0=a.c;if(a.c>c1)c1=a.c}
   const W=8,H=10,cols=Math.min(c1-c0+1,3500);
   cv.width=cols*W;cv.height=15*H;
@@ -426,7 +448,7 @@ function render(){
   $('#rep').innerHTML=song._rep||'';
   drawRoll();
 }
-function toJSON(){const o={...song};delete o._info;delete o._rep;return JSON.stringify([o])}
+function toJSON(){const o={...song};delete o._info;delete o._rep;delete o._exact;delete o._cell;return JSON.stringify([o])}
 
 /* ---------- Xuất file ---------- */
 function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
@@ -444,6 +466,327 @@ $('#bMid').onclick=async()=>{
   if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:f.name});return}catch(e){if(e.name==='AbortError')return}}
   download(fileName+'.mid',new Blob([midiBytes],{type:'application/octet-stream'}));log('Đã tải '+fileName+'.mid','ok');
 };
+
+/* ---------- Chuyển MIDI chính xác: đọc metadata track/channel/program, không dùng bộ lọc âm thanh ---------- */
+let RAW=null,RAWsrc=null,RAWid=0,RT=null,drawnId=-1,PLOG=[];const proCache=new Map();
+const NN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],pn=p=>NN[p%12]+(Math.floor(p/12)-1);
+const FAM=['Piano/Keyboard','Acoustic Guitar','Electric Guitar','Bass','Violin/String','Flute/Woodwind','Brass','Synth','Drum/Percussion','Other'];
+/* GM program → nhóm nhạc cụ */
+const famOf=p=>p<8||(p>=16&&p<24)?0:p===24||p===25?1:p>=26&&p<32?2:p>=32&&p<40?3:(p>=40&&p<46)||(p>=48&&p<52)?4:p>=56&&p<64?6:p>=64&&p<80?5:p>=80&&p<104?7:9;
+const fz=o=>{if(o&&typeof o==='object'&&!Object.isFrozen(o)){Object.freeze(o);for(const k in o)fz(o[k])}return o};
+const tickAt=(arr,t)=>{let lo=0,hi=arr.length-1,r=-1;while(lo<=hi){const m=(lo+hi)>>1;if(arr[m].tick<=t){r=m;lo=m+1}else hi=m-1}return r};
+/* tempo map → thời gian tuyệt đối (ms), tra bằng tìm kiếm nhị phân */
+function mkT2ms(tempos,div){
+  const tk=[0],ms=[0],us=[500000];
+  for(const t of [...tempos].sort((a,b)=>a.tick-b.tick)){
+    const L=tk.length-1;
+    if(t.tick===tk[L]){us[L]=t.us;continue}
+    ms.push(ms[L]+(t.tick-tk[L])*us[L]/1000/div);tk.push(t.tick);us.push(t.us);
+  }
+  const f=tick=>{let lo=0,hi=tk.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(tk[m]<=tick)lo=m;else hi=m-1}return ms[lo]+(tick-tk[lo])*us[lo]/1000/div};
+  f.tk=tk;f.ms=ms;f.us=us;return f;
+}
+function domTempo(maxTick){
+  const {tk,ms,us}=RT;let best=us[0],bd=-1;
+  for(let i=0;i<tk.length;i++){const d=(i+1<tk.length?ms[i+1]:RT(maxTick))-ms[i];if(d>bd){bd=d;best=us[i]}}
+  return 6e7/best;
+}
+/* đọc MIDI đầy đủ: note on/off (hàng đợi theo phím, giữ nốt trùng phím chồng nhau), program, bank, sustain pedal, tempo */
+function parseMidiFull(src){
+  const ab=src instanceof ArrayBuffer?src:src.buffer.slice(src.byteOffset,src.byteOffset+src.byteLength),d=new DataView(ab);let p=0;
+  const str=n=>{let s='';for(let i=0;i<n;i++)s+=String.fromCharCode(d.getUint8(p++));return s};
+  if(str(4)!=='MThd')throw new Error('Không phải file MIDI hợp lệ.');
+  p+=4;p+=2;const nt=d.getUint16(p);p+=2;const div=d.getUint16(p);p+=2;
+  if(div&0x8000)throw new Error('MIDI dùng nhịp SMPTE, chưa được hỗ trợ.');
+  const mk=()=>Array.from({length:16},()=>[]),tempos=[],trk=[],prog=mk(),bank=mk(),pedal=mk();
+  let errs=0,id=0,maxTick=0;
+  while(trk.length<nt&&p+8<=d.byteLength){
+    const tid=str(4),len=d.getUint32(p);p+=4;const end=Math.min(p+len,d.byteLength);
+    if(tid!=='MTrk'){p=end;continue}
+    const ti=trk.length,notes=[],act=new Map();let tick=0,rs=0,name='';
+    const vl=()=>{let v=0,b;do{b=d.getUint8(p++);v=(v<<7)|(b&127)}while(b&128&&p<end);return v};
+    try{while(p<end){
+      tick+=vl();let s=d.getUint8(p);
+      if(s===0xFF){p++;const ty=d.getUint8(p++),l=vl();
+        if(ty===0x51&&l===3)tempos.push({tick,us:(d.getUint8(p)<<16)|(d.getUint8(p+1)<<8)|d.getUint8(p+2)});
+        if(ty===0x03){name='';for(let i=0;i<l;i++)name+=String.fromCharCode(d.getUint8(p+i))}
+        p+=l;
+      }else if(s===0xF0||s===0xF7){p++;p+=vl()}
+      else{
+        if(s&128){rs=s;p++}else s=rs;
+        const hi=s>>4,ch=s&15;
+        if(hi===9||hi===8){
+          const n=d.getUint8(p++),v=d.getUint8(p++),k=ch*128+n;
+          if(hi===9&&v>0){const o={id:id++,tr:ti,ch,n,v,s:tick,e:null,x:0,bad:0};notes.push(o);let q=act.get(k);if(!q)act.set(k,q=[]);q.push(o)}
+          else{const q=act.get(k);if(q&&q.length)q.shift().e=tick;else errs++}
+        }else if(hi===0xB){const c=d.getUint8(p++),v=d.getUint8(p++);if(c===64)pedal[ch].push({tick,on:v>=64});else if(c===0)bank[ch].push({tick,v})}
+        else if(hi===0xC)prog[ch].push({tick,v:d.getUint8(p++)});
+        else if(hi===0xD)p++;else p+=2;
+      }
+    }}catch(e){errs++}
+    p=end;
+    for(const o of notes){if(o.e==null){o.e=tick;o.bad|=1}if(o.e<=o.s)o.bad|=2}
+    maxTick=Math.max(maxTick,tick);
+    trk.push({idx:ti,name:name||('Track '+(ti+1)),notes,endTick:tick});
+  }
+  const byT=(a,b)=>a.tick-b.tick;tempos.sort(byT);
+  for(let c=0;c<16;c++){prog[c].sort(byT);bank[c].sort(byT);pedal[c].sort(byT)}
+  /* sustain pedal: nốt được kéo dài đến lúc nhả pedal (chỉ ảnh hưởng độ dài hiệu dụng, không tạo nốt mới) */
+  const nxt=pedal.map(a=>{const r=new Array(a.length);let nx=-1;for(let i=a.length-1;i>=0;i--){if(!a[i].on)nx=i;r[i]=nx}return r});
+  for(const t of trk)for(const o of t.notes){
+    const i=tickAt(pedal[o.ch],o.e);
+    if(i>=0&&pedal[o.ch][i].on){const j=nxt[o.ch][i];o.x=j>=0?pedal[o.ch][j].tick:Math.max(o.e,maxTick)}else o.x=o.e;
+  }
+  return{div,tempos,trk,prog,bank,pedal:pedal.reduce((a,b)=>a+b.length,0),errs,maxTick};
+}
+/* phân loại theo (track, channel, nhóm nhạc cụ) từ program/bank/percussion flag; cao độ chỉ để gợi ý phụ */
+function classify(raw){
+  const T=mkT2ms(raw.tempos,raw.div),parts=new Map();
+  for(const tr of raw.trk)for(const n of tr.notes){
+    const pi=tickAt(raw.prog[n.ch],n.s),bi=tickAt(raw.bank[n.ch],n.s),pg=pi<0?0:raw.prog[n.ch][pi].v,bk=bi<0?0:raw.bank[n.ch][bi].v;
+    const perc=n.ch===9||bk===120,fam=perc?8:famOf(pg),k=n.tr+':'+n.ch+':'+fam;
+    let P=parts.get(k);
+    if(!P)parts.set(k,P={key:k,tr:n.tr,ch:n.ch,fam,perc,prog:pg,hasProg:pi>=0,name:tr.name,conf:1,hint:'',
+      ev:perc?(n.ch===9?'kênh 10 / percussion flag':'bank drum kit'):pi>=0?'program '+pg:'không có Program Change (mặc định Piano)',notes:[]});
+    P.notes.push(n);
+  }
+  const out=[...parts.values()].sort((a,b)=>a.tr-b.tr||a.ch-b.ch||a.fam-b.fam);
+  for(const P of out){
+    if(!P.perc&&/drum|percuss|\bkit\b/i.test(P.name)){P.perc=true;P.fam=8;P.conf=.5;P.ev='tên track'}
+    else if(!P.perc&&P.fam!==3&&/\bbass(?!oon)/i.test(P.name)){P.fam=3;P.conf=.5;P.ev='tên track'}
+    const ps=P.notes.map(n=>n.n).sort((x,y)=>x-y);
+    P.lo=ps[0];P.hi=ps[ps.length-1];
+    if(!P.hasProg&&!P.perc&&P.fam===0&&P.hi<=57&&ps[ps.length>>1]<=45)P.hint='cao độ thấp, có thể là Bass (chưa xác nhận, vẫn giữ)';
+    const ev=[];let t0=Infinity,t1=0;
+    for(const n of P.notes){const a=T(n.s),b=T(n.e);ev.push([a,1],[b,-1]);if(a<t0)t0=a;if(b>t1)t1=b}
+    ev.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);let c=0,mx=0;for(const e of ev){c+=e[1];if(c>mx)mx=c}
+    P.poly=mx;P.dur=t1-t0;
+  }
+  return out;
+}
+function ensureRaw(){
+  if(RAW&&RAWsrc===midiBytes)return;
+  const r=parseMidiFull(midiBytes);r.parts=classify(r);
+  RAW=fz(r);RAWsrc=midiBytes;RAWid++;RT=mkT2ms(RAW.tempos,RAW.div);proCache.clear();
+}
+function drawParts(){
+  const el=$('#ptracks');el.innerHTML='';
+  const auto=RAW.parts.map(P=>!P.perc&&P.fam!==3);
+  if(!auto.some(Boolean)){let b=0;RAW.parts.forEach((P,i)=>{if(P.notes.length>RAW.parts[b].notes.length)b=i});auto[b]=true}
+  RAW.parts.forEach((P,i)=>{
+    const l=document.createElement('label'),c=document.createElement('input'),b=document.createElement('b'),sm=document.createElement('small');
+    l.className='ptr';c.type='checkbox';c.id='pp'+i;c.checked=auto[i];
+    b.textContent=' Track '+(P.tr+1)+' · ch '+(P.ch+1)+' — '+FAM[P.fam]+' — '+P.notes.length.toLocaleString('en-US')+' notes';
+    sm.textContent=[P.name,'Program '+(P.hasProg?P.prog:'—'),pn(P.lo)+'–'+pn(P.hi),fmtT(P.dur/1000),'polyphony '+P.poly,
+      P.perc?'Percussion':'không phải percussion','căn cứ: '+P.ev+(P.conf<1?' (confidence thấp)':'')].join(' · ')+(P.hint?' · ⚠ '+P.hint:'');
+    l.append(c,b,document.createElement('br'),sm);el.appendChild(l);
+  });
+  $('#pinfo').textContent='Tempo: '+RAW.tempos.length+' sự kiện · Sustain pedal: '+RAW.pedal+' sự kiện · Sự kiện MIDI lỗi bị bỏ qua: '+RAW.errs;
+}
+/* ghép lưới BPM: ưu tiên bội số của tempo trong MIDI, chỉ quét rộng khi không đạt sai số cho phép */
+function fitGrid(on,manual,dec,tolMs,maxB,uss){
+  const ev=bpm=>{
+    const L=60000/bpm;let c=0,s=0;
+    for(const o of on){const a=o.t/L*2*Math.PI;c+=Math.cos(a);s+=Math.sin(a)}
+    let t0=Math.atan2(s,c)/(2*Math.PI)*L,lo=1e9,hi=-1e9;
+    for(const o of on){const x=(o.t-t0)/L,e=(x-Math.round(x))*L;if(e<lo)lo=e;if(e>hi)hi=e}
+    t0+=(lo+hi)/2;let col=0,pr=NaN;
+    for(const o of on){const r=Math.round((o.t-t0)/L);if(r===pr)col++;pr=r}
+    return{bpm,L,t0,mx:(hi-lo)/2,col};
+  };
+  if(manual>0)return ev(manual);
+  const fm=b=>dec?Math.round(b*1e6)/1e6:Math.round(b),mid=new Set(),all=new Set();
+  for(const u of uss)for(const d of [1,2,3,4,6,8,12,16])mid.add(fm(6e7/u*d));
+  for(let b=30;b<=maxB;b++)all.add(b);
+  const mk=s=>[...s].filter(b=>b>=30&&b<=maxB).sort((a,b)=>a-b).map(ev).filter(x=>x.col===0);
+  const c1=mk(mid);let g=c1.find(x=>x.mx<=tolMs);
+  if(g)return g;
+  const c=c1.concat(mk(all));
+  if(c.length){const m=Math.min(...c.map(x=>x.mx));g=c.find(x=>x.mx<=tolMs)||c.find(x=>x.mx<=m*1.05+1e-9)}
+  return g||ev(maxB);
+}
+async function proCompute(sel,mode,tim,poly){
+  const cnt={in:0,perc:0,bass:0,unsel:0,dup:0,bad:0,poly:0,coll:0,fixed:0,ovl:0},warn=[],plog=[],fams=new Set(),trs=[];
+  const spd=Math.max(.25,Math.min(3,(+$('#speed').value||100)/100)),acc=$('#acc').value,dec=$('#dec').checked,sus=+$('#sus').value;
+  const row=(a,why,extra)=>plog.push([a.P.tr+1,a.P.ch+1,FAM[a.P.fam],'',a.n.n,pn(a.n.n),'','','','','',why]);
+  /* 1) chọn track + loại theo metadata (Drum/Bass/không chọn) */
+  let list=[];
+  for(const P of RAW.parts){
+    cnt.in+=P.notes.length;
+    const why=!sel.has(P.key)?(P.perc?'perc':P.fam===3?'bass':'unsel'):(mode==='clean'&&P.perc?'perc':'');
+    if(why){cnt[why]+=P.notes.length;continue}
+    fams.add(FAM[P.fam]);trs.push('Track '+(P.tr+1)+' ch'+(P.ch+1)+' ('+FAM[P.fam]+')');
+    for(const n of P.notes){
+      const a={n,P,s:RT(n.s)/spd,e:RT(n.e)/spd,x:RT(n.x)/spd};
+      if(n.bad&&mode==='clean'){cnt.bad++;row(a,'loại: dữ liệu lỗi ('+(n.bad&1?'thiếu Note Off':'độ dài 0')+')');continue}
+      if(n.bad)cnt.fixed++;
+      list.push(a);
+    }
+  }
+  if(!list.length)throw new Error('Không còn nốt nào sau khi chọn track.');
+  /* 2) chuẩn hóa: chỉ bỏ nốt trùng hoàn toàn (cùng pitch, cùng start, cùng end) */
+  const seen=new Set(),uq=[];
+  for(const a of list){const k=a.n.n+'|'+Math.round(a.s*10)+'|'+Math.round(a.e*10);if(seen.has(k)){cnt.dup++;row(a,'loại: duplicate');continue}seen.add(k);uq.push(a)}
+  list=uq.sort((a,b)=>a.s-b.s);
+  const le=new Map();for(const a of list){if((le.get(a.n.n)||-1)>a.s+.01)cnt.ovl++;le.set(a.n.n,Math.max(le.get(a.n.n)||-1,a.e))}
+  await frame();
+  /* 3) mapping pitch: thử dịch quãng tám/tông toàn bài trước (giữ cao độ tương đối), rồi mới gập quãng tám/xê nửa cung từng nốt */
+  const hist=new Array(128).fill(0);for(const a of list)hist[a.n.n]++;
+  const shSel=$('#tr').value,ocSel=$('#oct').value,rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+  let bc=Infinity,sh=0,oc=0;
+  for(const a of shSel==='auto'?rng(-11,11):[+shSel])for(const o of ocSel==='auto'?rng(-3,3):[+ocSel]){
+    const S=a+12*o;let c=0;
+    for(let p=0;p<128;p++)if(hist[p]){const f=foldOct(p+S);c+=hist[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}
+    c+=.01*Math.abs(a)+.0001*Math.abs(o);
+    if(c<bc){bc=c;sh=a;oc=o}
+  }
+  const S=sh+12*oc;let prev=null,nExact=0,nOct=0,nAcc=0;
+  for(const a of list){
+    const r=mapPitch(a.n.n+S,prev,acc),base=foldOct(a.n.n+S).m,diff=keyMidi(r.i)-base,fo=(base-(a.n.n+S))/12;
+    a.key=r.i;a.diff=diff;a.fo=fo;prev=r.i;
+    a.why=diff?'thăng/giáng: xê '+(diff>0?'+':'')+diff+' nửa cung':fo?'ngoài 15 phím: gập '+(fo>0?'+':'')+fo+' quãng tám':S?'chỉ dịch toàn bài':'giữ nguyên';
+    if(diff)nAcc++;else if(fo)nOct++;else nExact++;
+  }
+  /* 4) melody + polyphony: nốt melody trước, rồi velocity, rồi confidence */
+  let pmin=127,pmax=0;for(const a of list){if(a.n.n<pmin)pmin=a.n.n;if(a.n.n>pmax)pmax=a.n.n}
+  const cl=[];for(const a of list){const c=cl[cl.length-1];if(c&&a.s-c.t<=15)c.l.push(a);else cl.push({t:a.s,l:[a]})}
+  let pm=null;
+  for(const c of cl){
+    let best=null,bs=-1;
+    for(const a of c.l){
+      const dur=Math.min(1,(a.e-a.s)/1000);
+      a.sc=.4*(a.n.n-pmin)/Math.max(1,pmax-pmin)+.3*(pm==null?.5:1-Math.min(1,Math.abs(a.n.n-pm)/12))+.15*a.n.v/127+.15*dur;
+      if(a.sc>bs){bs=a.sc;best=a}
+    }
+    best.mel=1;pm=best.n.n;
+    if(mode==='melody'&&c.l.length>2){let lw=c.l[0];for(const a of c.l)if(a.n.n<lw.n.n)lw=a;if(lw!==best)lw.sc-=.3}
+  }
+  const pri=a=>(a.mel?1e6:0)+(mode==='melody'?a.sc*1e3+a.n.v:a.n.v*1e3+a.P.conf*10+a.sc);
+  const kept=[];
+  for(const c of cl){
+    if(c.l.length>poly){c.l.sort((x,y)=>pri(y)-pri(x));for(let i=poly;i<c.l.length;i++){cnt.poly++;row(c.l[i],'loại: vượt polyphony '+poly)}c.l.length=poly}
+    for(const a of c.l)kept.push(a);
+  }
+  kept.sort((a,b)=>a.s-b.s);
+  await frame();
+  /* 5) timing */
+  const t0=kept[0].s,errs=[],START=4;let bpm,Lg=0,g=null,pushed=0;
+  const domB=domTempo(RAW.maxTick)*spd;
+  if(tim==='exact'){
+    bpm=dec?Math.round(domB*100)/100:Math.round(domB);
+    for(const a of kept){a.o=Math.round(a.s-t0)+500;errs.push(Math.abs(a.o-(a.s-t0+500)))}
+  }else{
+    const on=[];for(const a of kept){const c=on[on.length-1];if(c&&a.s-c.t<=15)c.l.push(a);else on.push({t:a.s,l:[a]})}
+    const manual=tim==='manual'?+$('#bpmfix').value:0;
+    if(tim==='manual'&&!(manual>0))warn.push('Manual Quantize cần nhập "BPM của game" ở phần tùy chỉnh; đã dùng Smart Quantize.');
+    const tolIn=parseFloat($('#tol').value),maxIn=parseFloat($('#maxbpm').value);
+    g=fitGrid(on,manual,dec,Math.max(.01,isNaN(tolIn)?0:tolIn),Math.max(30,isNaN(maxIn)?500:maxIn),new Set((RAW.tempos.length?RAW.tempos.slice(0,40).map(x=>x.us):[500000]).map(u=>u/spd)));
+    bpm=g.bpm;Lg=g.L;
+    if(Math.abs(bpm-domB)/domB>.01)warn.push('BPM Sky ('+bpm+') khác BPM chính của MIDI ('+domB.toFixed(2)+'): kiểm tra sai số timing.');
+    let last=-1e9,c0=null;
+    for(const o of on){
+      const x=(o.t-g.t0)/Lg;let c=Math.round(x);
+      if(c<=last){c=last+1;pushed++}
+      last=c;if(c0===null)c0=c;
+      o.c=c-c0+START;o.gt=o.t+(c-x)*Lg;
+      for(const a of o.l){a.o=o.c;errs.push(Math.abs(o.gt-a.s))}
+    }
+  }
+  /* 6) collision (cùng phím cùng thời điểm) + giới hạn polyphony sau quy đổi thời gian */
+  const slots=new Map();
+  for(const a of kept){
+    let m=slots.get(a.o);if(!m)slots.set(a.o,m=new Map());
+    const q=m.get(a.key);
+    if(q){const lose=pri(q)>=pri(a)?a:q;cnt.coll++;row(lose,'loại: trùng phím cùng thời điểm');if(lose===q)m.set(a.key,a)}
+    else m.set(a.key,a);
+  }
+  for(const m of slots.values())if(m.size>poly){
+    const arr=[...m.values()].sort((x,y)=>pri(y)-pri(x));
+    for(let i=poly;i<arr.length;i++){cnt.poly++;row(arr[i],'loại: vượt polyphony '+poly+' sau quy đổi thời gian');m.delete(arr[i].key)}
+  }
+  /* 7) nốt giữ (tùy chọn): lặp theo ô nhịp, không tạo nốt giả nếu để Tắt */
+  let nKept=0,reps=0;
+  for(const m of slots.values())nKept+=m.size;
+  if(sus>0)for(const [t,m] of [...slots])for(const a of [...m.values()]){
+    const dur=a.x-a.s;if(a.rep||dur<=2*sus)continue;
+    const k=tim==='exact'?0:Math.max(1,Math.round(sus/Lg)),n=tim==='exact'?Math.floor(dur/sus):Math.round(dur/Lg);
+    for(let j=1;tim==='exact'?j<n:j*k<n;j++){
+      const tt=tim==='exact'?t+Math.round(j*sus):t+j*k,st=slots.get(tt)||new Map();
+      if(st.has(a.key)||st.size>=poly)continue;
+      st.set(a.key,{...a,rep:1});slots.set(tt,st);reps++;
+    }
+  }
+  /* 8) xuất + nhật ký mapping */
+  const notes=[];
+  for(const t of [...slots.keys()].sort((a,b)=>a-b)){
+    const tm=tim==='exact'?t:Math.ceil(t*Lg)+1,m=slots.get(t);
+    for(const k of [...m.keys()].sort((x,y)=>x-y)){
+      const a=m.get(k);notes.push({time:tm,key:'1Key'+k});
+      if(!a.rep)plog.push([a.P.tr+1,a.P.ch+1,FAM[a.P.fam],tm,a.n.n,pn(a.n.n),k,keyMidi(k),a.diff,a.fo+oc,sh,a.why]);
+    }
+  }
+  const N=list.length,mean=errs.length?errs.reduce((x,y)=>x+y,0)/errs.length:0,mx=errs.reduce((x,y)=>Math.max(x,y),0),nT=errs.filter(e=>e>.5).length;
+  const selIn=cnt.in-cnt.perc-cnt.bass-cnt.unsel,lost=cnt.dup+cnt.bad+cnt.poly+cnt.coll;
+  const durSky=notes.length?(notes[notes.length-1].time-notes[0].time)/1000:0,durMidi=(kept[kept.length-1].s-t0)/1000;
+  if(selIn&&lost/selIn>.05)warn.push('Đã loại '+lost+' nốt ('+(lost/selIn*100).toFixed(1)+'%) trong track đã chọn (trùng, lỗi, collision, polyphony).');
+  if(N&&nAcc/N>.1)warn.push(nAcc+' nốt ('+(nAcc/N*100).toFixed(1)+'%) phải xê nửa cung để vào 15 phím.');
+  if(N&&nOct/N>.2)warn.push(nOct+' nốt ('+(nOct/N*100).toFixed(1)+'%) phải gập quãng tám.');
+  if(mx>30)warn.push('Sai lệch timing tối đa '+mx.toFixed(1)+' ms.');
+  if(pushed)warn.push(pushed+' thời điểm bị đẩy sang ô kế do trùng ô (rhythm thay đổi nhẹ).');
+  if(cnt.fixed)warn.push(cnt.fixed+' nốt MIDI lỗi nhẹ (thiếu Note Off/độ dài 0) được giữ và sửa.');
+  if(Math.abs(durSky-durMidi)>.5)warn.push('Độ dài Sky ('+durSky.toFixed(1)+' s) lệch độ dài MIDI ('+durMidi.toFixed(1)+' s).');
+  const R=(t,v)=>t+': <b>'+v+'</b>',esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const g2=Math.round(1e3*(sh))/1e3;
+  const rep='<b>Báo cáo chuyển đổi MIDI chính xác</b> (chỉ số thực tế, không phải "độ chính xác tuyệt đối")<br>'+[
+    '<u>MIDI</u>',R('Tổng nốt',cnt.in),R('Track đã chọn',esc(trs.join('; '))),R('Nhạc cụ',[...fams].join(', ')),
+    '<u>Đã giữ</u>',R('Số nốt',nKept)+(reps?' (+'+reps+' lần bấm lặp do nốt giữ)':''),
+    '<u>Đã loại</u>',R('Drum/Percussion',cnt.perc),R('Bass',cnt.bass),R('Track không chọn',cnt.unsel),R('Duplicate',cnt.dup),R('Dữ liệu lỗi',cnt.bad),R('Trùng phím cùng lúc',cnt.coll),R('Vượt polyphony '+poly,cnt.poly),
+    '<u>Mapping</u>',R('Dịch toàn bài',(sh>0?'+':'')+g2+' nửa cung, '+(oc>0?'+':'')+oc+' quãng tám'),R('Giữ nguyên pitch (sau dịch toàn bài)',nExact),R('Đổi octave',nOct),R('Đổi pitch (thăng/giáng)',nAcc),
+    '<u>Timing</u>',R('Chế độ',tim==='exact'?'Exact Timing':tim==='smart'?'Smart Quantize':'Manual Quantize'),R('BPM',bpm+(tim==='exact'?' (tempo MIDI, chỉ để ghi chú)':'')),
+    R('Sai lệch timing trung bình / tối đa',mean.toFixed(2)+' / '+mx.toFixed(2)+' ms')].join('<br>');
+  const ok=(c,t)=>'<div class="'+(c?'':'w')+'">'+(c?'✓ ':'⚠ ')+t+'</div>';
+  const val='<b>Sky Conversion Validation</b>'+
+    ok(1,'Nốt đầu vào: '+cnt.in+' · giữ: '+nKept+' · loại: '+(cnt.in-nKept))+
+    ok(!lost,'Loại trong track đã chọn: '+lost+' (trùng '+cnt.dup+', lỗi '+cnt.bad+', collision '+cnt.coll+', polyphony '+cnt.poly+')')+
+    ok(!nAcc,'Đổi pitch: '+nAcc+' · đổi octave: '+nOct+' · đổi timing (>0,5 ms): '+nT)+
+    ok(!pushed,'BPM: '+bpm+' · độ dài Sky: '+durSky.toFixed(1)+' s · độ dài MIDI đã chọn: '+durMidi.toFixed(1)+' s')+
+    ok(1,'Track/nhạc cụ đã chọn: '+esc(trs.join('; ')))+
+    warn.map(w=>ok(0,esc(w))).join('');
+  const song={isComposed:true,bpm,bitsPerPage:16,pitchLevel:0,isEncrypted:false,songNotes:notes,
+    _info:'PRO '+mode.toUpperCase()+' · '+tim+' · BPM '+bpm+' · dịch '+(sh>0?'+':'')+g2+' nửa cung, '+(oc>0?'+':'')+oc+' quãng tám',_rep:rep,_exact:tim==='exact',_cell:tim==='exact'?50:0};
+  return{song,val,plog,warn,nKept};
+}
+async function proConvert(){
+  const go=$('#bProGo');go.disabled=true;
+  try{
+    ensureRaw();
+    const sel=new Set();RAW.parts.forEach((P,i)=>{const c=$('#pp'+i);if(c&&c.checked)sel.add(P.key)});
+    if(!sel.size)throw new Error('Chưa chọn track nào.');
+    const mode=$('#pmode').value,tim=$('#ptim').value,poly=+$('#ppoly').value||10;
+    const ck=[RAWid,[...sel].join(),mode,tim,poly,['#tr','#oct','#acc','#bpmfix','#tol','#maxbpm','#sus','#speed'].map(s=>$(s).value).join(),$('#dec').checked].join('|');
+    step(1,'run','Đang chuyển MIDI chính xác…');
+    let res=proCache.get(ck);
+    if(res)log('Dùng lại kết quả đã tính (dữ liệu và tùy chọn không đổi)');
+    else{log('Chuyển MIDI chính xác: '+mode.toUpperCase()+' · '+tim+' · polyphony '+poly+' (không dùng bộ lọc âm thanh)');await frame();res=await proCompute(sel,mode,tim,poly);proCache.set(ck,res)}
+    song={name:$('#name').value,author:$('#author').value,transcribedBy:$('#by').value,...res.song};
+    PLOG=res.plog;$('#pval').innerHTML=res.val;$('#bProCsv').hidden=false;
+    step(1,'ok','PRO · BPM '+song.bpm+' · '+res.nKept+' nốt Sky');step(2,'ok','Có thể tải .txt hoặc .json');
+    res.warn.forEach(w=>log('⚠ '+w,'wr'));log('Hoàn tất chuyển MIDI chính xác: '+song.songNotes.length+' nốt Sky','ok');
+    render();
+  }catch(e){step(1,'err','Lỗi');log('Lỗi chuyển MIDI chính xác: '+(e.message||e),'err')}
+  finally{go.disabled=false}
+}
+$('#bProGo').onclick=proConvert;
+$('#bPro').onclick=()=>{
+  const p=$('#pro');p.hidden=!p.hidden;
+  if(!p.hidden)try{ensureRaw();if(drawnId!==RAWid){drawParts();drawnId=RAWid}}
+  catch(e){log('Không đọc được metadata MIDI: '+(e.message||e),'err');p.hidden=true}
+};
+$('#bProCsv').onclick=()=>{
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"',h='track,channel,instrument,time_ms,midi_orig,note_orig,sky_key,midi_sky,pitch_diff,octave_shift,transpose,reason';
+  download(safe()+'-mapping.csv',new Blob(['\ufeff'+h+'\n'+PLOG.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));
+};
+const gridOK=j=>{const Lg=60000/(j.bpm||120),a=j.songNotes;if(!a.length)return true;let ok=0;for(const n of a){const r=((n.time-1)%Lg+Lg)%Lg;if(r<3||Lg-r<3)ok++}return ok/a.length>=.95};
 
 /* ---------- Nhập file ---------- */
 for(let t=-11;t<=11;t++){const o=document.createElement('option');o.value=t;o.textContent=(t>0?'+':'')+t;$('#tr').appendChild(o)}
@@ -606,7 +949,7 @@ function finishSeq(ns,kind,lv){
 async function load(f,inst,filt){
   if(!f)return;stop();song=null;midiBytes=null;render();
   inst=inst||$('#srcinst').value;$('#srcinst').value=inst;filt=filt||$('#filt').value;$('#filt').value=filt;document.querySelectorAll('.pinst').forEach(o=>o.value=inst);if(window.Tone)loadInst(inst);
-  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
+  T0=performance.now();$('#log').innerHTML='';$('#bMid').hidden=true;$('#bPro').hidden=true;$('#pro').hidden=true;$('#pval').innerHTML='';$('#bProCsv').hidden=true;$('#opts').hidden=true;$('#mplay').hidden=true;
   [0,1,2].forEach(i=>step(i,'idle','Chờ…'));
   fileName=f.name.replace(/\.[^.]+$/,'');
   log('Nhận file: '+f.name+' ('+(f.size/1048576).toFixed(2)+' MB)');
@@ -615,7 +958,7 @@ async function load(f,inst,filt){
     let buf=await f.arrayBuffer();const h=String.fromCharCode(...new Uint8Array(buf.slice(0,4)));
     if(h==='MThd'){
       step(0,'ok','Bỏ qua: file đã là MIDI');log('Phát hiện file MIDI, bỏ qua bước nhận dạng');
-      parseMidi(buf);midiBytes=buf;$('#bMid').hidden=false;$('#tol').value=0;$('#name').value=fileName;
+      parseMidi(buf);midiBytes=buf;$('#bMid').hidden=false;$('#bPro').hidden=false;$('#tol').value=0;$('#name').value=fileName;
       await dbPut('midi',{blob:new Blob([buf],{type:'audio/midi'}),name:fileName,inst});
       log('Đọc được '+tracks.length+' track, '+tracks.reduce((a,t)=>a+t.notes.length,0)+' nốt');
       showTracks();await convert();
@@ -637,7 +980,7 @@ async function load(f,inst,filt){
       if(isG||FILT[filt])ns=finishSeq(ns,kind,filt);
       if(!ns.notes.length)throw new Error('Không phát hiện nốt '+(isG?'guitar':'piano')+' nào trong file.');
       buf=null; /* bỏ dữ liệu âm thanh gốc, chỉ giữ nốt piano */
-      midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;
+      midiBytes=mm.sequenceProtoToMidi(ns);$('#bMid').hidden=false;$('#bPro').hidden=false;
       log('Nhận dạng xong: '+ns.notes.length+' nốt, dài '+ns.totalTime.toFixed(1)+' giây','ok');
       step(0,'ok',ns.notes.length+' nốt');
       /* Dọn dẹp: lưu MIDI rồi xóa MP3 đã lưu trước đó */
@@ -663,7 +1006,7 @@ function loadSky(buf){
   else txt=new TextDecoder('utf-8').decode(buf);
   let j=JSON.parse(txt.replace(/^\uFEFF/,''));if(Array.isArray(j))j=j[0];
   if(!j||!j.songNotes)throw new Error('File không phải MIDI, âm thanh hay bản nhạc Sky hợp lệ.');
-  tracks=[];song=j;song._info='Mở từ file Sky có sẵn • BPM '+j.bpm;
+  tracks=[];song=j;song._exact=!gridOK(j);song._cell=song._exact?50:0;song._info='Mở từ file Sky có sẵn • BPM '+j.bpm;
   $('#opts').hidden=false;
   $('#name').value=j.name||fileName;$('#author').value=j.author||'';$('#by').value=j.transcribedBy||'';
   $('#tracks').innerHTML='';
