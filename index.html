@@ -66,7 +66,8 @@ textarea{width:100%;height:110px;font:12px ui-monospace,monospace;background:#07
   <div class="grid">
     <label>Lọc nốt nhẹ: bỏ nốt có lực nhấn dưới (0–127)<input id="minv" type="number" value="0" min="0" max="127"></label>
     <label>Lọc nốt ngắn: bỏ nốt ngắn hơn (ms)<input id="minl" type="number" value="0" min="0" step="any"></label>
-    <label>Nốt không có trong 15 phím<select id="acc"><option value="follow">Theo giai điệu</option><option value="down">Hạ xuống</option><option value="up">Nâng lên</option></select></label>
+    <label>Nốt không có trong 15 phím<select id="acc"><option value="smart">Xê nửa cung thông minh (theo hướng giai điệu)</option><option value="drop">Bỏ nốt lướt thăng/giáng ngắn (&lt;120 ms)</option><option value="chord">Nốt trầm: thay bằng bậc 1/5 của hợp âm</option><option value="down">Luôn hạ xuống</option><option value="up">Luôn nâng lên</option></select></label>
+    <label><input type="checkbox" id="thin"> Tỉa hợp âm dày: giữ bass + giai điệu, bỏ nốt giữa</label>
     <label>Tối đa nốt đánh cùng lúc<select id="poly"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option selected>10</option></select></label>
     <label>Nốt vượt giới hạn<select id="over"><option value="60">Rải lệch tối đa 60 ms (không mất nốt)</option><option value="30">Rải lệch tối đa 30 ms</option><option value="0">Bỏ nốt ưu tiên thấp</option></select></label>
     <label>Khoảng cách tối thiểu 2 lần bấm cùng phím (ms, 0 = tắt)<input id="gap" type="number" value="0" min="0" max="300" step="any"></label>
@@ -85,9 +86,10 @@ textarea{width:100%;height:110px;font:12px ui-monospace,monospace;background:#07
 
 <section id="res" hidden>
   <h2>Bản 15 phím Sky</h2>
-  <div class="row"><button class="pri" id="bSky">▶ Nghe bản Sky</button></div>
+  <div class="row"><button class="pri" id="bSky">▶ Nghe bản Sky</button><button id="bBoth">▶ Nghe cả 2 (gốc + Sky)</button><button id="bStop2">■ Dừng</button><button id="bEdit">✎ Vào chỉnh sửa</button></div>
   <div id="keys" role="group" aria-label="15 phím Sky"></div>
   <p id="stats"></p>
+  <div id="edbox" hidden>
   <h2>Chỉnh sửa</h2>
   <div class="row">
     <button id="bUndo">↶ Hoàn tác</button><button id="bRedo">↷ Làm lại</button>
@@ -95,6 +97,7 @@ textarea{width:100%;height:110px;font:12px ui-monospace,monospace;background:#07
   </div>
   <div class="lg"><span><i style="background:#5ad1e6"></i>Đúng cao độ</span><span><i style="background:#f5b942"></i>Gập quãng tám</span><span><i style="background:#ff6a62"></i>Xê nửa cung</span><span><i style="background:#8be28b"></i>Bạn thêm</span><span>Chạm ô để thêm / xoá nốt</span></div>
   <div id="edwrap"><div id="edlab"></div><div id="edscroll"><canvas id="ed" aria-label="Trình chỉnh sửa nốt 15 phím"></canvas></div></div>
+  </div>
   <div id="rep"></div>
   <div class="row"><button id="bTxt">Tải .txt (UTF-16)</button><button id="bJson">Tải .json</button><button id="bCopy">Sao chép JSON</button></div>
   <details><summary>Xem JSON</summary><textarea id="json" readonly></textarea></details>
@@ -104,10 +107,9 @@ textarea{width:100%;height:110px;font:12px ui-monospace,monospace;background:#07
 <script>
 const $=s=>document.querySelector(s);
 const SC=[0,2,4,5,7,9,11],NN=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'],BK=[1,3,6,8,10];
-const TONE='https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.js',SAL='https://tonejs.github.io/audio/salamander/';
 const COL={exact:'#5ad1e6',oct:'#f5b942',acc:'#ff6a62',x:'#8be28b'};
-let us0=[500000],parts=[],song=null,fname='bai-nhac',bpm0=120,sampler=null,part=null,tk=0,ST=null,hist=[],fut=[],edited=false;
-const PL={on:false,start:0,t0:0,mode:''};
+let us0=[500000],parts=[],song=null,fname='bai-nhac',bpm0=120,tk=0,ST=null,hist=[],fut=[],edited=false;
+const PL={on:false,start:0,o:false,s:false,o0:0,s0:0};
 const T0=performance.now();
 
 function log(m,c=''){const L=$('#log'),d=document.createElement('div');d.className=c;d.textContent=((performance.now()-T0)/1000).toFixed(1)+'s  '+m;L.appendChild(d);L.scrollTop=L.scrollHeight}
@@ -193,7 +195,7 @@ function drawParts(){
 const selNotes=()=>parts.filter((P,i)=>$('#p'+i)&&$('#p'+i).checked).flatMap(P=>P.notes);
 
 /* ---------- Quy đổi sang 15 phím Sky ---------- */
-const pri=n=>n.v*128+n.n;
+const pri=n=>(n.top?1e6:0)+n.v*128+n.n;
 function gapFix(notes,g){
   const by=new Map();let moved=0,mx=0;
   for(const n of notes){let q=by.get(n.key);if(!q)by.set(n.key,q=[]);q.push(n)}
@@ -212,41 +214,75 @@ function evalB(bpm,on){
   for(const o of on){const r=Math.round((o.t-t0)/L);if(r===pr)col++;pr=r}
   return{bpm,L,t0,mx:(hi-lo)/2,col};
 }
+/* ---------- Pitch Engine: dò tông có trọng số, nốt thăng/giáng, gập quãng tám theo cụm, skyline ---------- */
+function pitchEngine(all,o){
+  const ev=all.sort((a,b)=>a.s-b.s||a.n-b.n),base=ev[0].s,cl0=[];
+  for(const n of ev){const c=cl0[cl0.length-1];if(c&&n.s-c.t<=15)c.l.push(n);else cl0.push({t:n.s,l:[n]})}
+  for(const c of cl0){let top=c.l[0];for(const n of c.l)if(n.n>top.n)top=n;for(const n of c.l)n.top=n===top}
+  /* điểm trọng số: nốt dài nặng hơn, nốt giai điệu (cao nhất mỗi thời điểm) gấp 3 */
+  const W=new Array(128).fill(0);
+  for(const n of ev)W[n.n]+=(1+Math.min(n.e-n.s,2000)/250)*(n.top?3:1);
+  const rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+  let bc=Infinity,sh=0,oc=0;
+  for(const a of o.shS==='auto'?rng(-6,5):[+o.shS])for(const k of o.ocS==='auto'?rng(-3,3):[+o.ocS]){
+    let c=0;
+    for(let p=0;p<128;p++)if(W[p]){const f=fold(p+a+12*k);c+=W[p]*(3*f.k+(SC.includes(f.m%12)?0:4))}
+    c+=.01*Math.abs(a)+.0001*Math.abs(k);
+    if(c<bc){bc=c;sh=a;oc=k}
+  }
+  const S=sh+12*oc;
+  /* gập quãng tám theo cụm câu (ngắt cụm khi im lặng > 500 ms): cả cụm dịch cùng một lượng */
+  const ps=[];cl0.forEach((c,i)=>{if(!i||c.t-cl0[i-1].t>500)ps.push([]);ps[ps.length-1].push(c)});
+  for(const p of ps){
+    const ns=p.flatMap(c=>c.l);let bd=0,bn=Infinity;
+    for(const d of [0,-12,12,-24,24]){const bad=ns.filter(n=>{const x=n.n+S+d;return x<60||x>84}).length;if(bad<bn){bn=bad;bd=d}}
+    for(const n of ns){n.p=n.n+S+bd;n.sh=bd!==0;if(bd)o.cnt.ctx++}
+  }
+  for(const n of ev){const f=fold(n.p);n.m=f.m;n.inS=SC.includes(f.m%12);n.fk=!!(f.k||n.sh)}
+  cl0.forEach((c,i)=>{c.ci=i;c.tm=Math.max(...c.l.map(n=>n.m))});
+  /* gán phím; nốt thăng/giáng xử lý theo tùy chọn */
+  let prev=null;
+  for(const c of cl0)for(const n of c.l){
+    if(n.inS){n.key=keyIdx(n.m);n.t=n.fk?'oct':'exact';prev=n.key;continue}
+    const lo=keyIdx(n.m-1),hi=keyIdx(n.m+1),nx=cl0[c.ci+1],pv=cl0[c.ci-1],dir=nx?Math.sign(nx.tm-c.tm):pv?Math.sign(c.tm-pv.tm):0;
+    n.t='acc';
+    if(o.acc==='drop'&&n.e-n.s<120&&nx&&pv&&SC.includes(nx.tm%12)&&SC.includes(pv.tm%12)){n.drop=true;o.cnt.pass++;continue}
+    if(o.acc==='chord'&&n.m<72){
+      const r=c.l.filter(x=>x.inS).sort((a,b)=>a.m-b.m)[0];
+      if(r){
+        const pcs=[r.m%12,(r.m+7)%12];let bm=null;
+        for(let m=n.m-6;m<=n.m+6;m++)if(pcs.includes(m%12)&&SC.includes(m%12)&&(bm==null||Math.abs(m-n.m)<Math.abs(bm-n.m)))bm=m;
+        if(bm!=null&&bm>=60&&bm<=84){n.key=keyIdx(bm);o.cnt.chord++;prev=n.key;continue}
+      }
+    }
+    n.key=o.acc==='down'?lo:o.acc==='up'?hi:dir>0?hi:dir<0?lo:prev==null?lo:(Math.abs(hi-prev)<Math.abs(lo-prev)?hi:lo);
+    prev=n.key;
+  }
+  const cl=cl0.map(c=>({...c,l:c.l.filter(n=>!n.drop)})).filter(c=>c.l.length);
+  /* trùng phím: giai điệu thắng; tỉa hợp âm dày: giữ bass + giai điệu, bỏ nốt giữa trước */
+  for(const c of cl){
+    const m=new Map();
+    for(const n of c.l){const q=m.get(n.key);o.cnt.dup+=q?1:0;if(!q||pri(n)>pri(q))m.set(n.key,n)}
+    let l=[...m.values()].sort((a,b)=>pri(b)-pri(a));
+    if(o.thin&&l.length>o.poly){
+      const asc=[...l].sort((a,b)=>a.key-b.key),top=asc[asc.length-1],bot=asc[0],mid=(top.key+bot.key)/2;
+      const rest=asc.slice(1,-1).sort((a,b)=>Math.abs(b.key-mid)-Math.abs(a.key-mid));
+      l=[top,bot,...rest].slice(0,o.poly);o.cnt.drop+=asc.length-l.length;
+    }
+    c.l=l;
+  }
+  return{ev,cl,sh,oc,base};
+}
 function run(){
   const minV=+$('#minv').value||0,minL=+$('#minl').value||0;
   const all=selNotes().filter(n=>n.v>=minV&&n.e-n.s>=minL).map(n=>({...n}));
   stop();hist=[];fut=[];edited=false;
   if(!all.length){song=null;show();return}
-  const poly=+$('#poly').value,stag=+$('#over').value,g=parseFloat($('#gap').value)||0,acc=$('#acc').value;
-  const hs=new Array(128).fill(0);for(const n of all)hs[n.n]++;
-  const rng=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i),shS=$('#tr').value,ocS=$('#oct').value;
-  let bc=Infinity,sh=0,oc=0;
-  for(const a of shS==='auto'?rng(-11,11):[+shS])for(const o of ocS==='auto'?rng(-3,3):[+ocS]){
-    let c=0;
-    for(let p=0;p<128;p++)if(hs[p]){const f=fold(p+a+12*o);c+=hs[p]*(3*f.k+(SC.includes(f.m%12)?0:1))}
-    c+=.01*Math.abs(a)+.0001*Math.abs(o);
-    if(c<bc){bc=c;sh=a;oc=o}
-  }
-  const S=sh+12*oc,ev=all.sort((a,b)=>a.s-b.s||a.n-b.n),base=ev[0].s;
-  let prev=null;
-  for(const n of ev){
-    const f=fold(n.n+S);n.m=f.m;
-    if(SC.includes(f.m%12)){n.key=keyIdx(f.m);n.t=f.k?'oct':'exact'}
-    else{
-      const lo=keyIdx(f.m-1),hi=keyIdx(f.m+1);
-      n.key=acc==='down'?lo:acc==='up'?hi:prev==null?lo:(Math.abs(hi-prev)<Math.abs(lo-prev)?hi:lo);n.t='acc';
-    }
-    prev=n.key;
-  }
-  const exact=$('#tim').value==='exact',cl=[];
-  for(const n of ev){const c=cl[cl.length-1];if(c&&n.s-c.t<=15)c.l.push(n);else cl.push({t:n.s,l:[n]})}
-  const cnt={exact:0,acc:0,oct:0,dup:0,drop:0,stag:0,pushed:0},out=[];
+  const poly=+$('#poly').value,thin=$('#thin').checked,stag=thin?0:+$('#over').value,g=parseFloat($('#gap').value)||0,acc=$('#acc').value;
+  const cnt={exact:0,acc:0,oct:0,dup:0,drop:0,stag:0,pushed:0,pass:0,chord:0,ctx:0},out=[];
+  const E=pitchEngine(all,{shS:$('#tr').value,ocS:$('#oct').value,acc,thin,poly,cnt});
+  const sh=E.sh,oc=E.oc,cl=E.cl,base=E.base,exact=$('#tim').value==='exact';
   let gbpm=Math.round(bpm0),gmx=0,Lg=0,gf={moved:0,mx:0};
-  for(const c of cl){
-    const m=new Map();
-    for(const n of c.l){const q=m.get(n.key);cnt.dup+=q?1:0;if(!q||pri(n)>pri(q))m.set(n.key,n)}
-    c.l=[...m.values()].sort((a,b)=>pri(b)-pri(a));
-  }
   if(exact){
     for(const c of cl)c.l.forEach((n,i)=>{
       const gr=Math.floor(i/poly),d=gr*20;
@@ -295,7 +331,7 @@ function run(){
     R('Giữ nguyên cao độ',cnt.exact+' ('+pc(cnt.exact)+')'),
     R('Gập quãng tám (ngoài 15 phím)',cnt.oct+' ('+pc(cnt.oct)+')'),
     R('Thăng/giáng phải xê nửa cung',cnt.acc+' ('+pc(cnt.acc)+')'),
-    R('Trùng phím cùng lúc (gộp)',cnt.dup),
+    R('Trùng phím cùng lúc (gộp)',cnt.dup),R('Nốt lướt thăng/giáng đã bỏ',cnt.pass),R('Nốt trầm thay bằng bậc 1/5',cnt.chord),R('Nốt dịch quãng tám theo cụm câu',cnt.ctx),
     R('Rải lệch thay vì bỏ (vượt '+poly+' nốt)',cnt.stag),R('Bỏ vì vượt giới hạn',cnt.drop),
     R('Giãn nốt cùng phím quá sát',gf.moved+(gf.moved?' (dời tối đa '+gf.mx.toFixed(1)+' ms)':'')),
     R('Kiểu thời gian',exact?'Chính xác (ms gốc)':'Lưới BPM '+gbpm+' (1 ô = '+Lg.toFixed(2)+' ms)'),
@@ -354,7 +390,7 @@ $('#bCopy').onclick=async()=>{try{await navigator.clipboard.writeText(toJSON());
 const SH=['c','d','o','d','o','o','d','c','d','o','o','d','o','d','c'],NM=['C','D','E','F','G','A','B'];
 const SV={o:'<circle cx="50" cy="50" r="25"/>',d:'<path d="M50 20L80 50L50 80L20 50Z"/>',c:'<path d="M50 12L88 50L50 88L12 50Z"/><circle cx="50" cy="50" r="27"/>'};
 function flash(i,ms){const e=$('#k'+i);if(!e)return;e.classList.add('hit');setTimeout(()=>e.classList.remove('hit'),ms)}
-async function tapKey(i){flash(i,160);try{const s=await inst();s.triggerAttackRelease(Tone.Frequency(keyMidi(i),'midi').toNote(),.6,Tone.now(),.8)}catch(e){}}
+function tapKey(i){flash(i,160);audio();voice(keyMidi(i),AC.currentTime,.5,.8,MG)}
 for(let i=0;i<15;i++){
   const b=document.createElement('button');b.type='button';b.className='key';b.id='k'+i;b.setAttribute('aria-label','Phím '+(i+1)+' '+NM[i%7]);
   b.innerHTML='<svg viewBox="0 0 100 100" aria-hidden="true">'+SV[SH[i]]+'<text x="50" y="59" text-anchor="middle" font-size="26">'+NM[i%7]+'</text></svg>';
@@ -383,12 +419,12 @@ function drawStage(now){
   for(let m=ST.lo;m<=ST.hi;m++){const p=ST.pos[m];if(!p.b&&m%12===0)x.fillRect(p.x*ww,0,1,HY)}
   for(const n of ST.notes){
     const yb=HY-(n.s-t)*SP,yt=yb-(n.e-n.s)*SP;
-    if(yt>HY)break;if(yb<0)continue;
+    if(yt>HY)continue;if(yb<0)break;
     const p=ST.pos[n.m],act=n.s<=t&&t<=n.e,h=(n.m%12)*30;
     if(act)on[n.m]=h;
     x.fillStyle='hsl('+h+',80%,'+(act?72:58)+'%)';
     if(act){x.shadowColor='hsl('+h+',90%,60%)';x.shadowBlur=14}
-    x.beginPath();x.roundRect(p.x*ww+1,Math.max(0,yt),p.w*ww-2,Math.min(yb,HY)-Math.max(0,yt),3);x.fill();x.shadowBlur=0;
+    x.beginPath();x[x.roundRect?'roundRect':'rect'](p.x*ww+1,Math.max(0,yt),p.w*ww-2,Math.min(yb,HY)-Math.max(0,yt),3);x.fill();x.shadowBlur=0;
     const a=t-n.s;
     if(a>=0&&a<.3){x.strokeStyle='hsla('+h+',90%,70%,'+(1-a/.3)+')';x.lineWidth=2;x.beginPath();x.ellipse((p.x+p.w/2)*ww,HY,6+a*90,3+a*20,0,0,7);x.stroke()}
   }
@@ -400,47 +436,68 @@ function drawStage(now){
 function loop(){
   if(!PL.on)return;
   const el=(performance.now()-PL.start)/1000;
-  if(PL.mode==='o')drawStage(PL.t0+el);else ed((PL.t0+el)*1000);
+  if(PL.o)drawStage(PL.o0+el);if(PL.s)ed((PL.s0+el)*1000);
   requestAnimationFrame(loop);
 }
 
-/* ---------- Nghe thử ---------- */
-async function inst(){
-  if(!window.Tone)await loadScript(TONE);
-  await Tone.start();
-  if(sampler)return sampler;
-  try{
-    sampler=await new Promise((res,rej)=>{
-      const u={};['A1','C2','A2','C3','A3','C4','A4','C5','A5','C6','A6','C7'].forEach(k=>u[k]=k+'.mp3');
-      const s=new Tone.Sampler({urls:u,baseUrl:SAL,release:1,onload:()=>res(s),onerror:rej}).toDestination();
-      setTimeout(()=>rej(new Error('quá thời gian')),20000);
-    });
-  }catch(e){
-    log('Không tải được âm piano mẫu, dùng âm tổng hợp','wr');
-    sampler=new Tone.PolySynth(Tone.Synth,{envelope:{attack:.005,decay:.3,sustain:.1,release:.6}}).toDestination();
+/* ---------- Âm thanh: Web Audio có sẵn (đàn kiểu harp/piano), không tải thư viện hay mẫu từ mạng ---------- */
+let AC=null,MG=null;const SCH={timer:0,bus:null};
+function audio(){ /* gọi đồng bộ ngay trong lúc bấm nút để điện thoại cho phép phát tiếng */
+  if(!AC){
+    AC=new(window.AudioContext||window.webkitAudioContext)();
+    MG=AC.createGain();MG.gain.value=.8;
+    const comp=AC.createDynamicsCompressor(),len=Math.floor(AC.sampleRate*1.8),ir=AC.createBuffer(2,len,AC.sampleRate);
+    for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3)}
+    const rv=AC.createConvolver(),wet=AC.createGain();rv.buffer=ir;wet.gain.value=.22;
+    MG.connect(comp);MG.connect(rv);rv.connect(wet);wet.connect(comp);comp.connect(AC.destination);
   }
-  return sampler;
+  if(AC.state!=='running')AC.resume();
+  return AC;
+}
+function voice(m,t,d,v,out){
+  const f=440*Math.pow(2,(m-69)/12),g=AC.createGain(),pk=.2*v*Math.min(1,1.6-m/90),rel=Math.max(d,.15);
+  g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(pk,t+.004);
+  g.gain.exponentialRampToValueAtTime(pk*.35,t+.25);
+  g.gain.exponentialRampToValueAtTime(.0001,t+rel+1.2);
+  for(const [h,a] of [[1,1],[2,.4],[3,.15]]){
+    const o=AC.createOscillator(),og=AC.createGain();o.frequency.value=f*h;og.gain.value=a;
+    o.connect(og);og.connect(g);o.start(t);o.stop(t+rel+1.3);
+  }
+  g.connect(out);
 }
 function stop(){
-  tk++;PL.on=false;
-  if(window.Tone){try{Tone.Transport.stop();Tone.Transport.cancel(0)}catch(e){}}
-  if(part){try{part.dispose()}catch(e){}part=null}
-  if(sampler){try{sampler.releaseAll()}catch(e){}}
+  clearInterval(SCH.timer);PL.on=false;
+  if(SCH.bus&&AC){const b=SCH.bus;b.gain.setTargetAtTime(0,AC.currentTime,.03);setTimeout(()=>{try{b.disconnect()}catch(e){}},300);SCH.bus=null}
   if(ST)drawStage(null);if(song)ed(-1);
 }
-async function play(ev,mode){
-  if(!ev.length)return;stop();const my=tk;
-  let s;try{s=await inst()}catch(e){log('Không phát được: '+(e.message||e),'err');return}
-  if(my!==tk)return;
-  const t0=ev[0].time,dur=Math.max(...ev.map(e=>e.time-t0+e.d));
-  part=new Tone.Part((t,e)=>{s.triggerAttackRelease(Tone.Frequency(e.m,'midi').toNote(),e.d,t,.8);if(e.k!=null)Tone.Draw.schedule(()=>flash(e.k,140),t)},ev.map(e=>({...e,time:e.time-t0}))).start(0);
-  Tone.Transport.start('+0.1');
-  Object.assign(PL,{on:true,start:performance.now()+100,t0,mode});requestAnimationFrame(loop);
-  setTimeout(()=>{if(my===tk)stop()},(dur+1)*1000);
+/* o = nốt MIDI gốc, s = nốt bản Sky (mỗi bên tính từ nốt đầu tiên của nó, nên cả 2 bắt đầu cùng lúc); đưa cả 2 để nghe chồng lên nhau */
+function play(o,s){
+  stop();const A=audio(),both=!!(o&&s),q=[];
+  const add=(ev,k)=>{if(!ev||!ev.length)return 0;const t0=ev[0].time;for(const e of ev)q.push({...e,time:e.time-t0,v:e.v*k});return t0};
+  const o0=add(o,both?.6:1),s0=add(s,both?.6:1);
+  if(!q.length)return;
+  q.sort((x,y)=>x.time-y.time);
+  const bus=A.createGain();bus.connect(MG);SCH.bus=bus;
+  const T=A.currentTime+.1,dur=q[q.length-1].time;let i=0;
+  const pump=()=>{
+    const lim=A.currentTime+.4-T;
+    while(i<q.length&&q[i].time<lim){
+      const e=q[i++],w=T+e.time;
+      voice(e.m,Math.max(w,A.currentTime),e.d,e.v,bus);
+      if(e.k!=null)setTimeout(()=>flash(e.k,140),Math.max(0,(w-A.currentTime)*1000));
+    }
+    if(i>=q.length&&A.currentTime-T>dur+2)stop();
+  };
+  pump();SCH.timer=setInterval(pump,60);
+  Object.assign(PL,{on:true,start:performance.now()+100,o:!!o&&o.length>0,s:!!s&&s.length>0,o0,s0});requestAnimationFrame(loop);
 }
-$('#bSky').onclick=()=>song&&play(song.songNotes.map(n=>({time:n.time/1000,m:keyMidi(+n.key.slice(4)),k:+n.key.slice(4),d:.6})),'s');
-$('#bOrig').onclick=()=>play(selNotes().map(n=>({time:n.s/1000,m:n.n,d:Math.min(4,Math.max(.08,(n.e-n.s)/1000))})).sort((a,b)=>a.time-b.time),'o');
-$('#bStop').onclick=stop;
+const skyEv=()=>song?song.songNotes.map(n=>({time:n.time/1000,m:keyMidi(+n.key.slice(4)),k:+n.key.slice(4),d:.6,v:.8})):null;
+const origEv=()=>selNotes().map(n=>({time:n.s/1000,m:n.n,d:Math.min(4,Math.max(.08,(n.e-n.s)/1000)),v:Math.max(.25,n.v/127)})).sort((x,y)=>x.time-y.time);
+$('#bSky').onclick=()=>play(null,skyEv());
+$('#bOrig').onclick=()=>play(origEv(),null);
+$('#bBoth').onclick=()=>play(origEv(),skyEv());
+$('#bEdit').onclick=()=>{const b=$('#edbox'),open=b.hidden;b.hidden=!open;$('#bEdit').textContent=open?'✕ Thoát chỉnh sửa':'✎ Vào chỉnh sửa';if(open){ed(-1);b.scrollIntoView({behavior:'smooth',block:'nearest'})}};
+$('#bStop').onclick=stop;$('#bStop2').onclick=stop;
 
 /* ---------- Nhập file: chỉ nhận MIDI ---------- */
 async function load(f){
@@ -464,7 +521,7 @@ const drop=$('#drop'),fi=$('#file');
 ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('on')}));
 drop.addEventListener('drop',ev=>load(ev.dataTransfer.files[0]));
 fi.onchange=()=>{load(fi.files[0]);fi.value=''};
-['#poly','#over','#gap','#tr','#oct','#acc','#tim','#bpmfix','#tol','#maxbpm','#dec','#minv','#minl'].forEach(s=>$(s).addEventListener('change',rerun));
+['#poly','#over','#gap','#tr','#oct','#acc','#thin','#tim','#bpmfix','#tol','#maxbpm','#dec','#minv','#minl'].forEach(s=>$(s).addEventListener('change',rerun));
 $('#parts').addEventListener('change',rerun);
 ['#name','#author','#by'].forEach(s=>$(s).addEventListener('input',()=>{if(!song)return;song.name=$('#name').value;song.author=$('#author').value;song.transcribedBy=$('#by').value;$('#json').value=toJSON()}));
 addEventListener('resize',()=>{if(ST&&!PL.on)drawStage(null)});
